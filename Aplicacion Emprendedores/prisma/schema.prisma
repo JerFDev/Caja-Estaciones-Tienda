@@ -1,0 +1,180 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Configuracion {
+  id                         String   @id @default("config_default")
+  localCodigo                String   @default("LOCAL_01")
+  localNombre                String   @default("Tienda Creativa - Estaciones")
+  permitirStockNegativo      Boolean  @default(false)
+  porcentajeRetencionDefecto Float    @default(0.0)
+  turnoActual                String   @default("MANANA") // MANANA | TARDE
+  fechaActualizacion         DateTime @updatedAt
+}
+
+model Emprendimiento {
+  id                  String       @id @default(uuid())
+  codigo              String       @unique // Ej: "AKM", "TDE" (3-4 caracteres)
+  nombre              String       // Nombre comercial
+  responsable         String       // Nombre y apellido
+  telefono            String?
+  direccion           String?
+  alias               String?
+  cvu                 String?
+  mail                String?
+  rubro               String?
+  porcentajeRetencion Float        @default(0.0)
+  activo              Boolean      @default(true)
+  fechaCreacion       DateTime     @default(now())
+  fechaActualizacion  DateTime     @updatedAt
+
+  productos           Producto[]
+  ventas              Venta[]
+  retiros             Retiro[]
+
+  @@index([codigo])
+  @@index([activo])
+}
+
+model Producto {
+  id                 String       @id @default(uuid())
+  codigo             String       @unique // Ej: "AKM001"
+  emprendimientoId   String
+  nombre             String
+  descripcion        String?      @db.Text
+  precio             Float
+  activo             Boolean      @default(true)
+  stockMinimoAlerta  Int          @default(2)
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+
+  emprendimiento     Emprendimiento    @relation(fields: [emprendimientoId], references: [id])
+  movimientosStock   MovimientoStock[]
+  ventas             Venta[]
+
+  @@index([codigo])
+  @@index([emprendimientoId])
+  @@index([activo])
+}
+
+model MovimientoStock {
+  id             String   @id @default(uuid())
+  operacionUuid  String   @unique @default(uuid()) // Para consolidación
+  productoId     String
+  cantidad       Int      // Positivo para ingreso/devolución, pos/neg para ajuste
+  tipoMovimiento String   @default("INGRESO") // INGRESO | AJUSTE | DEVOLUCION
+  fecha          DateTime @default(now())
+  observaciones  String?  @db.Text
+  usuario        String?  @default("admin")
+  fechaCreacion  DateTime @default(now())
+
+  producto       Producto @relation(fields: [productoId], references: [id])
+
+  @@index([productoId])
+  @@index([fecha])
+}
+
+model Venta {
+  id                 String   @id @default(uuid())
+  identificadorUnico String   @unique // UUID v4 o LOCAL-TIMESTAMP-RAND
+  fecha              DateTime @default(now())
+  hora               String   // "HH:mm:ss"
+  turno              String   @default("MANANA") // MANANA | TARDE
+  productoId         String
+  emprendimientoId   String
+  cantidad           Int      @default(1)
+  precioUnitario     Float    // Inmutable, precio vigente al momento de venta
+  descuento          Float    @default(0) // Monto de descuento aplicado
+  total              Float    // (cantidad * precioUnitario) - descuento
+  metodoPago         String   @default("EFECTIVO") // EFECTIVO | TRANSFERENCIA
+  tipoCliente        String   @default("RESIDENTE") // TURISTA | RESIDENTE
+  localOrigen        String   @default("LOCAL_01")
+  usuario            String?  @default("cajero")
+  estado             String   @default("ACTIVO") // ACTIVO | ANULADO
+  motivoAnulacion    String?  @db.Text
+  observaciones      String?  @db.Text
+  fechaCreacion      DateTime @default(now())
+
+  producto           Producto       @relation(fields: [productoId], references: [id])
+  emprendimiento     Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@index([identificadorUnico])
+  @@index([fecha])
+  @@index([productoId])
+  @@index([emprendimientoId])
+  @@index([metodoPago])
+  @@index([estado])
+}
+
+model Retiro {
+  id                 String   @id @default(uuid())
+  identificadorUnico String   @unique
+  emprendimientoId   String
+  fecha              DateTime @default(now())
+  monto              Float
+  observaciones      String?  @db.Text
+  usuario            String?  @default("administrador")
+  estado             String   @default("ACTIVO") // ACTIVO | ANULADO
+  motivoAnulacion    String?  @db.Text
+  localOrigen        String   @default("LOCAL_01")
+  fechaCreacion      DateTime @default(now())
+
+  emprendimiento     Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@index([identificadorUnico])
+  @@index([emprendimientoId])
+  @@index([fecha])
+  @@index([estado])
+}
+
+model AuditoriaLog {
+  id           String   @id @default(uuid())
+  entidad      String   // VENTA | RETIRO | STOCK | PRODUCTO | EMPRENDIMIENTO
+  entidadId    String
+  accion       String   // CREACION | MODIFICACION | ANULACION | IMPORTACION
+  usuario      String   @default("sistema")
+  detallesJson String?  @db.Text
+  fecha        DateTime @default(now())
+
+  @@index([entidad, entidadId])
+  @@index([fecha])
+}
+
+model HistorialImportacion {
+  id              String   @id @default(uuid())
+  nombreArchivo   String
+  fecha           DateTime @default(now())
+  totalFilas      Int
+  filasNuevas     Int
+  filasDuplicadas Int
+  filasErrores    Int
+  usuario         String?  @default("administrador")
+  detallesJson    String?  @db.Text
+}
+
+model SesionCaja {
+  id                       String    @id @default(uuid())
+  montoInicial             Float     @default(0.0)
+  fechaApertura            DateTime  @default(now())
+  fechaCierre              DateTime?
+  turno                    String    @default("MANANA") // MANANA | TARDE
+  usuarioApertura          String?   @default("cajero")
+  usuarioCierre            String?
+  estado                   String    @default("ABIERTA") // ABIERTA | CERRADA
+  montoVentasEfectivo      Float?
+  montoVentasTransferencia Float?
+  montoRetiros             Float?
+  montoEsperadoEfectivo    Float?
+  montoRealContado         Float?
+  diferencia               Float?
+  observaciones            String?   @db.Text
+  fechaCreacion            DateTime  @default(now())
+
+  @@index([estado])
+  @@index([fechaApertura])
+}
