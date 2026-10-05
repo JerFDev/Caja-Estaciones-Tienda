@@ -1,14 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Download, FileSpreadsheet, FileJson, CheckCircle, Calendar, Filter } from 'lucide-react';
-import { api } from '../services/api';
-import { Emprendimiento } from '../types';
+import React, { useState, useEffect } from "react";
+import {
+  Download,
+  FileSpreadsheet,
+  FileJson,
+  CheckCircle,
+  Calendar,
+  Filter,
+} from "lucide-react";
+import { api } from "../services/api";
+import { Emprendimiento } from "../types";
 
 export const ExportPage: React.FC = () => {
   const [entrepreneurs, setEntrepreneurs] = useState<Emprendimiento[]>([]);
-  const [selectedEmpId, setSelectedEmpId] = useState('');
-  const [selectedType, setSelectedType] = useState('TODO');
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [selectedEmpId, setSelectedEmpId] = useState("");
+  const [selectedType, setSelectedType] = useState("TODO");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
 
   useEffect(() => {
     api.getEntrepreneurs(true).then(setEntrepreneurs).catch(console.error);
@@ -24,21 +31,23 @@ export const ExportPage: React.FC = () => {
     try {
       const res = await fetch(url);
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Error al exportar' }));
-        alert(err.error || 'Error al generar el archivo.');
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Error al exportar" }));
+        alert(err.error || "Error al generar el archivo.");
         return;
       }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = `Reporte_Tienda_Creativa_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.download = `Reporte_Tienda_Creativa_${new Date().toISOString().split("T")[0]}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e: any) {
-      alert(e.message || 'Error al descargar el archivo.');
+      alert(e.message || "Error al descargar el archivo.");
     }
   };
 
@@ -47,21 +56,23 @@ export const ExportPage: React.FC = () => {
     try {
       const res = await fetch(url);
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Error al exportar' }));
-        alert(err.error || 'Error al generar el archivo.');
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Error al exportar" }));
+        alert(err.error || "Error al generar el archivo.");
         return;
       }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = `Backup_Tienda_Creativa_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `Backup_Tienda_Creativa_${new Date().toISOString().split("T")[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e: any) {
-      alert(e.message || 'Error al descargar el archivo.');
+      alert(e.message || "Error al descargar el archivo.");
     }
   };
 
@@ -69,9 +80,12 @@ export const ExportPage: React.FC = () => {
     <div className="space-y-6 max-w-4xl">
       {/* Cabecera */}
       <div>
-        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Exportación de Datos</h2>
+        <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+          Exportación de Datos
+        </h2>
         <p className="text-sm text-slate-500 font-medium">
-          Generación de planillas compatibles con Microsoft Excel / Google Sheets y copias de seguridad
+          Generación de planillas compatibles con Microsoft Excel / Google
+          Sheets y copias de seguridad
         </p>
       </div>
 
@@ -82,9 +96,11 @@ export const ExportPage: React.FC = () => {
             <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-extrabold text-lg text-slate-900">Planilla Consolidada (.xlsx)</h3>
+            <h3 className="font-extrabold text-lg text-slate-900">
+              Planilla Consolidada (.xlsx)
+            </h3>
             <p className="text-xs text-slate-500">
-              Exporta las hojas formateadas con ventas, stock, retiros y estados de cuenta
+              Exporta operaciones y catálogos de emprendimientos y productos
             </p>
           </div>
         </div>
@@ -100,11 +116,13 @@ export const ExportPage: React.FC = () => {
               onChange={(e) => setSelectedType(e.target.value)}
               className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none font-medium"
             >
-              <option value="TODO">Todas las Hojas (Ventas, Stock, Retiros, Saldos)</option>
+              <option value="TODO">Todas las Hojas</option>
               <option value="VENTAS">Sólo Ventas</option>
               <option value="STOCK">Sólo Stock y Existencias</option>
               <option value="RETIROS">Sólo Retiros de Efectivo</option>
               <option value="SALDOS">Sólo Resumen de Saldos Financieros</option>
+              <option value="EMPRENDIMIENTOS">Sólo Emprendimientos</option>
+              <option value="PRODUCTOS">Sólo Productos</option>
             </select>
           </div>
 
@@ -167,16 +185,20 @@ export const ExportPage: React.FC = () => {
             <FileJson className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-extrabold text-lg text-slate-900">Copia de Seguridad Completa (.json)</h3>
+            <h3 className="font-extrabold text-lg text-slate-900">
+              Copia de Seguridad Completa (.json)
+            </h3>
             <p className="text-xs text-slate-500">
-              Archivo con la totalidad de registros para respaldo informático, migración o diagnóstico
+              Archivo con la totalidad de registros para respaldo informático,
+              migración o diagnóstico
             </p>
           </div>
         </div>
 
         <p className="text-xs text-slate-500 leading-relaxed">
-          Este archivo contiene toda la base de datos local estructurada (emprendimientos, productos,
-          movimientos, ventas, retiros y auditoría). Puedes guardarlo en una unidad USB como resguardo.
+          Este archivo contiene toda la base de datos local estructurada
+          (emprendimientos, productos, movimientos, ventas, retiros y
+          auditoría). Puedes guardarlo en una unidad USB como resguardo.
         </p>
 
         <button

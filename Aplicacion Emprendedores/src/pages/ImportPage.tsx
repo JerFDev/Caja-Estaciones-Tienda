@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -8,9 +8,9 @@ import {
   Database,
   ArrowRight,
   RefreshCw,
-} from 'lucide-react';
-import { api } from '../services/api';
-import { ImportPreviewResult } from '../types';
+} from "lucide-react";
+import { api } from "../services/api";
+import { ImportPreviewResult } from "../types";
 
 export const ImportPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -32,11 +32,11 @@ export const ImportPage: React.FC = () => {
       const res = await api.previewImport(file);
       setPreview(res);
     } catch (err: any) {
-      alert(err.message || 'Error al procesar el archivo Excel.');
+      alert(err.message || "Error al procesar el archivo Excel.");
     } finally {
       setAnalyzing(false);
       // Reset input to allow re-selecting the same file
-      if (e.target) e.target.value = '';
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -45,11 +45,14 @@ export const ImportPage: React.FC = () => {
 
     try {
       setImporting(true);
-      const res = await api.confirmImport(preview.datosNuevos, selectedFile.name);
+      const res = await api.confirmImport(
+        preview.datosNuevos,
+        selectedFile.name,
+      );
       setImportSuccess(res);
       setPreview(null);
     } catch (err: any) {
-      alert(err.message || 'Error al consolidar la información.');
+      alert(err.message || "Error al consolidar la información.");
     } finally {
       setImporting(false);
     }
@@ -69,7 +72,8 @@ export const ImportPage: React.FC = () => {
           Consolidación de Datos Multi-Local
         </h2>
         <p className="text-sm text-slate-500 font-medium">
-          Importación de archivos Excel generados en otras terminales sin duplicación de operaciones
+          Importación de archivos Excel generados en otras terminales sin
+          duplicación de operaciones
         </p>
       </div>
 
@@ -78,7 +82,9 @@ export const ImportPage: React.FC = () => {
         <div className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-2xl p-8 text-center transition-colors">
           <UploadCloud className="w-12 h-12 text-slate-400 mx-auto mb-3" />
           <p className="text-base font-extrabold text-slate-800">
-            {selectedFile ? selectedFile.name : 'Selecciona o arrastra una planilla Excel (.xlsx)'}
+            {selectedFile
+              ? selectedFile.name
+              : "Selecciona o arrastra una planilla Excel (.xlsx)"}
           </p>
           <p className="text-xs text-slate-400 mt-1">
             Archivos exportados desde otros locales o ferias de Tienda Creativa
@@ -99,7 +105,9 @@ export const ImportPage: React.FC = () => {
         {analyzing && (
           <div className="flex items-center justify-center space-x-2 text-slate-500 font-bold text-sm py-4">
             <RefreshCw className="w-5 h-5 animate-spin text-orange-600" />
-            <span>Validando estructura, productos y detectando duplicados...</span>
+            <span>
+              Validando estructura, productos y detectando duplicados...
+            </span>
           </div>
         )}
 
@@ -108,35 +116,47 @@ export const ImportPage: React.FC = () => {
           <div className="space-y-6 pt-4 border-t border-slate-100">
             <div className="flex items-center space-x-2">
               <Database className="w-5 h-5 text-slate-600" />
-              <h3 className="font-extrabold text-lg text-slate-900">Informe de Pre-Consolidación</h3>
+              <h3 className="font-extrabold text-lg text-slate-900">
+                Informe de Pre-Consolidación
+              </h3>
             </div>
 
             {/* Tarjetas de Conteo */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-xs font-bold text-slate-400 uppercase">Encontradas</span>
+                <span className="text-xs font-bold text-slate-400 uppercase">
+                  Encontradas
+                </span>
                 <p className="text-2xl font-black text-slate-800 mt-1">
                   {preview.resumen.totalEncontradas}
                 </p>
               </div>
 
               <div className="bg-orange-50 p-4 rounded-xl border border-orange-200">
-                <span className="text-xs font-bold text-orange-700 uppercase">Nuevas a Consolidar</span>
+                <span className="text-xs font-bold text-orange-700 uppercase">
+                  Nuevas a Consolidar
+                </span>
                 <p className="text-2xl font-black text-orange-700 mt-1">
                   {preview.resumen.nuevas}
                 </p>
               </div>
 
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
-                <span className="text-xs font-bold text-amber-700 uppercase">Ya Existentes</span>
+                <span className="text-xs font-bold text-amber-700 uppercase">
+                  Ya Existentes
+                </span>
                 <p className="text-2xl font-black text-amber-700 mt-1">
                   {preview.resumen.duplicadas}
                 </p>
-                <span className="text-[10px] text-amber-600 block mt-0.5">Se omiten (sin duplicar)</span>
+                <span className="text-[10px] text-amber-600 block mt-0.5">
+                  Se omiten (sin duplicar)
+                </span>
               </div>
 
               <div className="bg-red-50 p-4 rounded-xl border border-red-200">
-                <span className="text-xs font-bold text-red-700 uppercase">Errores</span>
+                <span className="text-xs font-bold text-red-700 uppercase">
+                  Errores
+                </span>
                 <p className="text-2xl font-black text-red-700 mt-1">
                   {preview.resumen.errores}
                 </p>
@@ -174,7 +194,11 @@ export const ImportPage: React.FC = () => {
                 disabled={importing || preview.resumen.nuevas === 0}
                 className="inline-flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-black px-6 py-3 rounded-xl shadow-md shadow-orange-600/20 transition-all cursor-pointer disabled:opacity-50"
               >
-                <span>{importing ? 'Consolidando...' : `Confirmar e Importar ${preview.resumen.nuevas} Registros`}</span>
+                <span>
+                  {importing
+                    ? "Consolidando..."
+                    : `Confirmar e Importar ${preview.resumen.nuevas} Registros`}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -185,11 +209,25 @@ export const ImportPage: React.FC = () => {
         {importSuccess && (
           <div className="bg-orange-50 border border-orange-200 rounded-2xl p-6 text-center space-y-3">
             <CheckCircle className="w-12 h-12 text-orange-600 mx-auto" />
-            <h3 className="text-xl font-black text-orange-900">¡Consolidación Exitosa!</h3>
+            <h3 className="text-xl font-black text-orange-900">
+              ¡Consolidación Exitosa!
+            </h3>
             <p className="text-sm text-orange-700 font-medium">
-              Se han incorporado a la base de datos local:{' '}
-              <strong>{importSuccess.ventasInsertadas} ventas</strong> y{' '}
-              <strong>{importSuccess.retirosInsertados} retiros</strong> sin duplicados.
+              Se han incorporado a la base de datos local:{" "}
+              <strong>{importSuccess.ventasInsertadas} ventas</strong> y{" "}
+              <strong>{importSuccess.retirosInsertados} retiros</strong> sin
+              duplicados.
+              {(importSuccess.emprendimientosInsertados > 0 ||
+                importSuccess.productosInsertados > 0) && (
+                <span>
+                  {" "}
+                  También se agregaron {
+                    importSuccess.emprendimientosInsertados
+                  }{" "}
+                  emprendimientos y {importSuccess.productosInsertados}{" "}
+                  productos del catálogo.
+                </span>
+              )}
             </p>
             <button
               onClick={handleReset}
