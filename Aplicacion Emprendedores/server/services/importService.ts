@@ -1,7 +1,7 @@
 import { prisma } from "../db";
 import ExcelJS from "exceljs";
 import { ImportPreviewResult } from "../../src/types";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 function extractCellText(cellVal: any): string {
   if (cellVal === null || cellVal === undefined) return "";
@@ -103,11 +103,16 @@ export const importService = {
   async previewImportExcel(buffer: Buffer): Promise<ImportPreviewResult> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as any);
+    const importBatchId = createHash("sha256")
+      .update(buffer)
+      .digest("hex")
+      .slice(0, 24);
 
     const wsVentas = workbook.getWorksheet("Ventas");
     const wsRetiros = workbook.getWorksheet("Retiros");
     const wsEmprendimientos = workbook.getWorksheet("Emprendimientos");
     const wsProductos = workbook.getWorksheet("Productos");
+    const wsStock = workbook.getWorksheet("Stock");
 
     if (!wsVentas && !wsRetiros && !wsEmprendimientos && !wsProductos) {
       return {
@@ -128,6 +133,7 @@ export const importService = {
 
     const ventasNuevas: any[] = [];
     const retirosNuevos: any[] = [];
+    const movimientosStockNuevos: any[] = [];
 
     // Pre-cargar identificadores existentes en la base de datos
     const ventasExistentes = new Set(
@@ -139,6 +145,13 @@ export const importService = {
       (
         await prisma.retiro.findMany({ select: { identificadorUnico: true } })
       ).map((r) => r.identificadorUnico),
+    );
+    const movimientosStockExistentes = new Set(
+      (
+        await prisma.movimientoStock.findMany({
+          select: { operacionUuid: true },
+        })
+      ).map((m) => m.operacionUuid),
     );
 
     // Pre-cargar mapas de productos y emprendimientos
@@ -276,6 +289,33 @@ export const importService = {
       }
     }
 
+    const wsExistencias = wsStock || wsProductos;
+    const existenciasPorCodigo = new Map<string, number>();
+    if (wsExistencias) {
+      const columns = findColumns(wsExistencias, {
+        codigo: ["Código Producto", "Codigo Producto", "Código", "Codigo"],
+        stock: ["Stock Actual", "Stock Restante", "Existencias"],
+      });
+      if (columns.codigo && columns.stock) {
+        for (
+          let rowNumber = 2;
+          rowNumber <= wsExistencias.rowCount;
+          rowNumber++
+        ) {
+          const row = wsExistencias.getRow(rowNumber);
+          const codigo = readCell(row, columns, "codigo").toUpperCase();
+          if (!codigo) continue;
+          existenciasPorCodigo.set(
+            codigo,
+            Math.max(
+              0,
+              Math.round(extractCellNumber(readCell(row, columns, "stock"))),
+            ),
+          );
+        }
+      }
+    }
+
     // Procesar Hoja de Ventas
     if (wsVentas) {
       // Buscar la fila de cabecera
@@ -311,6 +351,7 @@ export const importService = {
           if (val.includes("pago")) colMap.metodoPago = colNum;
           if (val.includes("cliente")) colMap.tipoCliente = colNum;
           if (val.includes("local")) colMap.local = colNum;
+          if (val.includes("estado")) colMap.estado = colNum;
         });
 
         if (colMap.idUnico || (colMap.fecha && colMap.codProd)) {
@@ -397,6 +438,10 @@ export const importService = {
         const hora = colMap.hora
           ? String(row.getCell(colMap.hora).value || "12:00:00")
           : "12:00:00";
+        const estadoRaw = colMap.estado
+          ? normalizeHeader(String(row.getCell(colMap.estado).value || ""))
+          : "";
+        const estado = estadoRaw.includes("anulad") ? "ANULADO" : "ACTIVO";
 
         ventasNuevas.push({
           identificadorUnico: idUnico,
@@ -413,7 +458,7 @@ export const importService = {
           tipoCliente,
           localOrigen,
           usuario: "importador",
-          estado: "ACTIVO",
+          estado,
         });
       }
     }
@@ -508,9 +553,51 @@ export const importService = {
       }
     }
 
+    const ventasActivasPorCodigo = new Map<string, number>();
+    for (const venta of ventasNuevas) {
+      if (venta.estado === "ACTIVO") {
+        ventasActivasPorCodigo.set(
+          venta.productoCodigo,
+          (ventasActivasPorCodigo.get(venta.productoCodigo) || 0) +
+            venta.cantidad,
+        );
+      }
+    }
+
+    for (const [codigo, stockActual] of existenciasPorCodigo) {
+      const producto = productosMap.get(codigo);
+      if (!producto) {
+        errores++;
+        detallesErrores.push(
+          `Hoja [Stock]: No se encontró el producto "${codigo}" en el catálogo importado o local.`,
+        );
+        continue;
+      }
+
+      const cantidadBase =
+        stockActual + (ventasActivasPorCodigo.get(codigo) || 0);
+      if (cantidadBase === 0) continue;
+
+      const operacionUuid = `STOCK-IMP-${importBatchId}-${codigo}`;
+      if (movimientosStockExistentes.has(operacionUuid)) {
+        duplicadas++;
+        continue;
+      }
+
+      movimientosStockNuevos.push({
+        operacionUuid,
+        productoId: producto.id,
+        cantidad: cantidadBase,
+        tipoMovimiento: cantidadBase < 0 ? "AJUSTE" : "INGRESO",
+        observaciones: "Existencia consolidada desde planilla Excel",
+        usuario: "importador",
+      });
+    }
+
     const nuevas =
       ventasNuevas.length +
       retirosNuevos.length +
+      movimientosStockNuevos.length +
       emprendimientosNuevos.length +
       productosNuevos.length;
 
@@ -527,7 +614,7 @@ export const importService = {
       datosNuevos: {
         ventas: ventasNuevas,
         retiros: retirosNuevos,
-        movimientosStock: [],
+        movimientosStock: movimientosStockNuevos,
         emprendimientosNuevos,
         productosNuevos,
       },
@@ -538,6 +625,7 @@ export const importService = {
     datosNuevos: {
       ventas: any[];
       retiros: any[];
+      movimientosStock?: any[];
       emprendimientosNuevos?: any[];
       productosNuevos?: any[];
     },
@@ -547,6 +635,7 @@ export const importService = {
     return prisma.$transaction(async (tx) => {
       let ventasInsertadas = 0;
       let retirosInsertados = 0;
+      let movimientosStockInsertados = 0;
       let emprendimientosInsertados = 0;
       let productosInsertados = 0;
 
@@ -585,6 +674,16 @@ export const importService = {
             },
           });
           productosInsertados++;
+        }
+      }
+
+      for (const movimiento of datosNuevos.movimientosStock || []) {
+        const existe = await tx.movimientoStock.findUnique({
+          where: { operacionUuid: movimiento.operacionUuid },
+        });
+        if (!existe) {
+          await tx.movimientoStock.create({ data: movimiento });
+          movimientosStockInsertados++;
         }
       }
 
@@ -627,7 +726,8 @@ export const importService = {
         }
       }
 
-      const totalNuevas = ventasInsertadas + retirosInsertados;
+      const totalNuevas =
+        ventasInsertadas + retirosInsertados + movimientosStockInsertados;
 
       await tx.historialImportacion.create({
         data: {
@@ -640,6 +740,7 @@ export const importService = {
           detallesJson: JSON.stringify({
             ventasInsertadas,
             retirosInsertados,
+            movimientosStockInsertados,
           }),
         },
       });
@@ -661,9 +762,32 @@ export const importService = {
       return {
         ventasInsertadas,
         retirosInsertados,
+        movimientosStockInsertados,
         emprendimientosInsertados,
         productosInsertados,
         totalConsolidadas: totalNuevas,
+      };
+    });
+  },
+
+  async clearAllData() {
+    return prisma.$transaction(async (tx) => {
+      const ventasEliminadas = await tx.venta.deleteMany();
+      const retirosEliminados = await tx.retiro.deleteMany();
+      const movimientosStockEliminados = await tx.movimientoStock.deleteMany();
+      const productosEliminados = await tx.producto.deleteMany();
+      const emprendimientosEliminados = await tx.emprendimiento.deleteMany();
+      const sesionesCajaEliminadas = await tx.sesionCaja.deleteMany();
+      await tx.historialImportacion.deleteMany();
+      await tx.auditoriaLog.deleteMany();
+
+      return {
+        ventasEliminadas: ventasEliminadas.count,
+        retirosEliminados: retirosEliminados.count,
+        movimientosStockEliminados: movimientosStockEliminados.count,
+        productosEliminados: productosEliminados.count,
+        emprendimientosEliminados: emprendimientosEliminados.count,
+        sesionesCajaEliminadas: sesionesCajaEliminadas.count,
       };
     });
   },
