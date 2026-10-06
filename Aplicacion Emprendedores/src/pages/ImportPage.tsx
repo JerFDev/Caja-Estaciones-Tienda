@@ -215,8 +215,12 @@ export const ImportPage: React.FC = () => {
             <p className="text-sm text-orange-700 font-medium">
               Se han incorporado a la base de datos local:{" "}
               <strong>{importSuccess.ventasInsertadas} ventas</strong> y{" "}
-              <strong>{importSuccess.retirosInsertados} retiros</strong> sin
-              duplicados.
+              <strong>{importSuccess.retirosInsertados} retiros</strong>,{" "}
+              <strong>
+                {importSuccess.movimientosStockInsertados || 0} movimientos de
+                stock
+              </strong>{" "}
+              sin duplicados.
               {(importSuccess.emprendimientosInsertados > 0 ||
                 importSuccess.productosInsertados > 0) && (
                 <span>

@@ -6,20 +6,58 @@ import {
   CheckCircle,
   Calendar,
   Filter,
+  AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { api } from "../services/api";
 import { Emprendimiento } from "../types";
+import { useAuth } from "../context/AuthContext";
 
 export const ExportPage: React.FC = () => {
+  const { isAdmin } = useAuth();
   const [entrepreneurs, setEntrepreneurs] = useState<Emprendimiento[]>([]);
   const [selectedEmpId, setSelectedEmpId] = useState("");
   const [selectedType, setSelectedType] = useState("TODO");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearCountdown, setClearCountdown] = useState(10);
+  const [clearingImports, setClearingImports] = useState(false);
+  const [clearFeedback, setClearFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     api.getEntrepreneurs(true).then(setEntrepreneurs).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!showClearModal || clearCountdown <= 0) return;
+    const timer = window.setTimeout(
+      () => setClearCountdown((seconds) => seconds - 1),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [showClearModal, clearCountdown]);
+
+  const handleOpenClearModal = () => {
+    setClearCountdown(10);
+    setClearFeedback(null);
+    setShowClearModal(true);
+  };
+
+  const handleClearImportedData = async () => {
+    try {
+      setClearingImports(true);
+      const result = await api.clearAllData();
+      setClearFeedback(
+        `Sistema vacío: ${result.emprendimientosEliminados} emprendimientos, ${result.productosEliminados} productos, ${result.ventasEliminadas} ventas, ${result.retirosEliminados} retiros, ${result.movimientosStockEliminados} movimientos y ${result.sesionesCajaEliminadas} sesiones de caja eliminados.`,
+      );
+      setShowClearModal(false);
+    } catch (error: any) {
+      alert(error.message || "No se pudo limpiar la información importada.");
+    } finally {
+      setClearingImports(false);
+    }
+  };
 
   const handleExportExcel = async () => {
     const url = api.getExportExcelUrl({
@@ -178,6 +216,24 @@ export const ExportPage: React.FC = () => {
         </button>
       </div>
 
+      {isAdmin && (
+        <div className="flex flex-col items-start gap-2">
+          <button
+            type="button"
+            onClick={handleOpenClearModal}
+            className="inline-flex items-center space-x-2 border border-rose-300 bg-white hover:bg-rose-50 text-rose-800 font-bold px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Vaciar todos los datos</span>
+          </button>
+          {clearFeedback && (
+            <p role="status" className="text-xs font-semibold text-emerald-700">
+              {clearFeedback}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Tarjeta de Backup JSON */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
@@ -209,6 +265,62 @@ export const ExportPage: React.FC = () => {
           <span>Descargar Backup JSON (.json)</span>
         </button>
       </div>
+
+      {isAdmin && showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-imports-title"
+            className="w-full max-w-md space-y-5 rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-rose-100 p-2.5 text-rose-700">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3
+                  id="clear-imports-title"
+                  className="text-lg font-black text-slate-900"
+                >
+                  ¿Estás seguro?
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Esto no se puede deshacer. Asegúrate de descargar la planilla
+                  antes de borrarla. Se eliminarán todos los emprendimientos,
+                  productos, ventas, retiros, movimientos de stock, sesiones de
+                  caja e historiales para dejar los paneles sin datos.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowClearModal(false)}
+                disabled={clearingImports}
+                className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleClearImportedData}
+                disabled={clearCountdown > 0 || clearingImports}
+                className="inline-flex min-w-44 items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>
+                  {clearingImports
+                    ? "Limpiando..."
+                    : clearCountdown > 0
+                      ? `Espera ${clearCountdown} s`
+                      : "Borrar todos los datos"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

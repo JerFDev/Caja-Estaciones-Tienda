@@ -1418,7 +1418,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                           setDiscountType("MONTO");
                           setDiscountValue(0);
                         }}
-                        className="text-[11px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer"
+                        className="text-xs font-bold text-orange-950 hover:text-orange-950 bg-orange-200 hover:bg-orange-300 border border-orange-300 px-3 py-1.5 rounded-full cursor-pointer transition-colors"
                       >
                         ¿Ingresar monto fijo en pesos ($)?
                       </button>
