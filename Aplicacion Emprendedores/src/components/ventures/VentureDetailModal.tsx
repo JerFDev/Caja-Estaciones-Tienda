@@ -63,9 +63,9 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
     codigo: '',
     nombre: '',
     descripcion: '',
-    precio: 0,
-    stockMinimoAlerta: 2,
-    stockInicial: 0,
+    precio: '' as string | number,
+    stockMinimoAlerta: 2 as string | number,
+    stockInicial: '' as string | number,
   });
   const [savingProduct, setSavingProduct] = useState(false);
 
@@ -136,9 +136,9 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
         codigo: nextCode,
         nombre: '',
         descripcion: '',
-        precio: 0,
+        precio: '',
         stockMinimoAlerta: 2,
-        stockInicial: 0,
+        stockInicial: '',
       });
       setShowProductModal(true);
     } catch (e: any) {
@@ -153,8 +153,9 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
       alert('El nombre del producto es obligatorio.');
       return;
     }
-    if (productForm.precio < 0) {
-      alert('El precio no puede ser negativo.');
+    const precioNum = parseFloat(String(productForm.precio));
+    if (isNaN(precioNum) || precioNum < 0) {
+      alert('Por favor ingresa un precio válido.');
       return;
     }
     try {
@@ -164,7 +165,7 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
         emprendimientoId: venture.id,
         nombre: productForm.nombre.trim(),
         descripcion: productForm.descripcion.trim(),
-        precio: Number(productForm.precio),
+        precio: precioNum,
         stockMinimoAlerta: Number(productForm.stockMinimoAlerta) || 2,
         stockInicial: Number(productForm.stockInicial) || 0,
       });
@@ -925,9 +926,11 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
                     min="0"
                     step="0.01"
                     required
+                    placeholder="0.00"
                     value={productForm.precio}
-                    onChange={(e) => setProductForm({ ...productForm, precio: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border rounded-xl text-sm font-bold text-orange-600"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setProductForm({ ...productForm, precio: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl text-sm font-bold text-orange-600 focus:outline-none focus:border-orange-500"
                   />
                 </div>
                 <div>
@@ -937,9 +940,11 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
                   <input
                     type="number"
                     min="0"
+                    placeholder="0"
                     value={productForm.stockInicial}
-                    onChange={(e) => setProductForm({ ...productForm, stockInicial: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border rounded-xl text-sm font-bold"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setProductForm({ ...productForm, stockInicial: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl text-sm font-bold focus:outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -951,9 +956,11 @@ export const VentureDetailModal: React.FC<VentureDetailModalProps> = ({
                 <input
                   type="number"
                   min="0"
+                  placeholder="2"
                   value={productForm.stockMinimoAlerta}
-                  onChange={(e) => setProductForm({ ...productForm, stockMinimoAlerta: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border rounded-xl text-sm"
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setProductForm({ ...productForm, stockMinimoAlerta: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:border-orange-500"
                 />
               </div>
 

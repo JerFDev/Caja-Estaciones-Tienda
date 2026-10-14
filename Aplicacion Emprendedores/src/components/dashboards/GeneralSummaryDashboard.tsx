@@ -40,6 +40,7 @@ interface GeneralSummaryDashboardProps {
   products: Producto[];
   withdrawals: Retiro[];
   totalStockAvailable: number;
+  selectedVentureId?: string;
   onVoidSale?: (sale: Venta) => void;
 }
 
@@ -49,8 +50,11 @@ export const GeneralSummaryDashboard: React.FC<GeneralSummaryDashboardProps> = (
   products,
   withdrawals,
   totalStockAvailable,
+  selectedVentureId,
   onVoidSale,
 }) => {
+  const isVentureSelected = Boolean(selectedVentureId && selectedVentureId !== 'TODOS');
+
   // Only active sales count towards revenue and KPIs
   const activeSales = sales.filter((s) => s.estado === 'ACTIVO');
 
@@ -242,13 +246,15 @@ export const GeneralSummaryDashboard: React.FC<GeneralSummaryDashboardProps> = (
           iconColor="text-purple-600 bg-purple-50"
         />
 
-        <MetricCard
-          title="Emprendimientos"
-          value={emprendimientosActivos}
-          subtitle="Participando activos"
-          icon={Users}
-          iconColor="text-teal-600 bg-teal-50"
-        />
+        {!isVentureSelected && (
+          <MetricCard
+            title="Emprendimientos"
+            value={emprendimientosActivos}
+            subtitle="Participando activos"
+            icon={Users}
+            iconColor="text-teal-600 bg-teal-50"
+          />
+        )}
 
         <MetricCard
           title="Productos en Catálogo"

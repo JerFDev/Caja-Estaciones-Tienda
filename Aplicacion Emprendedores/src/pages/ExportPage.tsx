@@ -1,61 +1,57 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   Download,
   FileSpreadsheet,
   FileJson,
-  CheckCircle,
-  Calendar,
-  Filter,
-  AlertTriangle,
-  Trash2,
-} from "lucide-react";
-import { api } from "../services/api";
-import { Emprendimiento } from "../types";
-import { useAuth } from "../context/AuthContext";
+  Share2,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
+import { api } from '../services/api';
+import { Emprendimiento } from '../types';
 
 export const ExportPage: React.FC = () => {
-  const { isAdmin } = useAuth();
   const [entrepreneurs, setEntrepreneurs] = useState<Emprendimiento[]>([]);
-  const [selectedEmpId, setSelectedEmpId] = useState("");
-  const [selectedType, setSelectedType] = useState("TODO");
-  const [fechaDesde, setFechaDesde] = useState("");
-  const [fechaHasta, setFechaHasta] = useState("");
-  const [showClearModal, setShowClearModal] = useState(false);
-  const [clearCountdown, setClearCountdown] = useState(10);
-  const [clearingImports, setClearingImports] = useState(false);
-  const [clearFeedback, setClearFeedback] = useState<string | null>(null);
+  const [selectedEmpId, setSelectedEmpId] = useState('');
+  const [selectedType, setSelectedType] = useState('TODO');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [downloadingSync, setDownloadingSync] = useState(false);
 
   useEffect(() => {
     api.getEntrepreneurs(true).then(setEntrepreneurs).catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (!showClearModal || clearCountdown <= 0) return;
-    const timer = window.setTimeout(
-      () => setClearCountdown((seconds) => seconds - 1),
-      1000,
-    );
-    return () => window.clearTimeout(timer);
-  }, [showClearModal, clearCountdown]);
-
-  const handleOpenClearModal = () => {
-    setClearCountdown(10);
-    setClearFeedback(null);
-    setShowClearModal(true);
-  };
-
-  const handleClearImportedData = async () => {
+  const handleExportSyncJson = async () => {
     try {
-      setClearingImports(true);
-      const result = await api.clearAllData();
-      setClearFeedback(
-        `Sistema vacío: ${result.emprendimientosEliminados} emprendimientos, ${result.productosEliminados} productos, ${result.ventasEliminadas} ventas, ${result.retirosEliminados} retiros, ${result.movimientosStockEliminados} movimientos y ${result.sesionesCajaEliminadas} sesiones de caja eliminados.`,
-      );
-      setShowClearModal(false);
-    } catch (error: any) {
-      alert(error.message || "No se pudo limpiar la información importada.");
+      setDownloadingSync(true);
+      const url = api.getExportSyncJsonUrl();
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Error al exportar' }));
+        alert(err.error || 'Error al generar el archivo de sincronización.');
+        return;
+      }
+
+      const disposition = res.headers.get('Content-Disposition');
+      let filename = `sincronizacion_${new Date().toISOString().split('T')[0]}.json`;
+      if (disposition && disposition.includes('filename="')) {
+        filename = disposition.split('filename="')[1].split('"')[0];
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (e: any) {
+      alert(e.message || 'Error al descargar el archivo de sincronización.');
     } finally {
-      setClearingImports(false);
+      setDownloadingSync(false);
     }
   };
 
@@ -69,23 +65,21 @@ export const ExportPage: React.FC = () => {
     try {
       const res = await fetch(url);
       if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Error al exportar" }));
-        alert(err.error || "Error al generar el archivo.");
+        const err = await res.json().catch(() => ({ error: 'Error al exportar' }));
+        alert(err.error || 'Error al generar el archivo.');
         return;
       }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = `Reporte_Tienda_Creativa_${new Date().toISOString().split("T")[0]}.xlsx`;
+      a.download = `Reporte_Tienda_Creativa_${new Date().toISOString().split('T')[0]}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e: any) {
-      alert(e.message || "Error al descargar el archivo.");
+      alert(e.message || 'Error al descargar el archivo.');
     }
   };
 
@@ -94,23 +88,21 @@ export const ExportPage: React.FC = () => {
     try {
       const res = await fetch(url);
       if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Error al exportar" }));
-        alert(err.error || "Error al generar el archivo.");
+        const err = await res.json().catch(() => ({ error: 'Error al exportar' }));
+        alert(err.error || 'Error al generar el archivo.');
         return;
       }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = `Backup_Tienda_Creativa_${new Date().toISOString().split("T")[0]}.json`;
+      a.download = `Backup_Tienda_Creativa_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e: any) {
-      alert(e.message || "Error al descargar el archivo.");
+      alert(e.message || 'Error al descargar el archivo.');
     }
   };
 
@@ -118,27 +110,82 @@ export const ExportPage: React.FC = () => {
     <div className="space-y-6 max-w-4xl">
       {/* Cabecera */}
       <div>
-        <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-          Exportación de Datos
-        </h2>
+        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Exportación de Datos</h2>
         <p className="text-sm text-slate-500 font-medium">
-          Generación de planillas compatibles con Microsoft Excel / Google
-          Sheets y copias de seguridad
+          Sincronización multi-local para traslado en pendrive, planillas Excel y copias de seguridad
         </p>
       </div>
 
-      {/* Tarjeta de Exportación XLSX */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+      {/* 1. Tarjeta Destacada: Sincronización Multi-Local (.json) */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-6 sm:p-7 shadow-xl space-y-5 border border-slate-700 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+          <Share2 className="w-48 h-48" />
+        </div>
+
+        <div className="flex items-start justify-between relative z-10">
+          <div className="flex items-center space-x-3.5">
+            <div className="p-3 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-2xl">
+              <Share2 className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="font-black text-xl text-white">Sincronización Multi-Local (.json)</h3>
+                <span className="bg-orange-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wide">
+                  Recomendado
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Para trasladar datos de computadoras locales a la computadora principal (vía pendrive u otro medio)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs relative z-10">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+            <span className="font-bold text-orange-400 block mb-0.5">✓ Cero Duplicados</span>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Cada venta, movimiento y retiro lleva un identificador global único. Reimportar el mismo archivo no duplica nada.
+            </p>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+            <span className="font-bold text-emerald-400 block mb-0.5">✓ Trazabilidad de Stock</span>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Exporta los movimientos reales e ingresos de stock, permitiendo el recálculo matemático exacto en la PC principal.
+            </p>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+            <span className="font-bold text-cyan-400 block mb-0.5">✓ Firma de Integridad</span>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Incluye firma SHA-256 y código de terminal (source_id) para auditoría e identificación de origen.
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2 relative z-10">
+          <button
+            onClick={handleExportSyncJson}
+            disabled={downloadingSync}
+            className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-orange-600 hover:bg-orange-500 text-white font-black px-7 py-3.5 rounded-2xl shadow-lg shadow-orange-600/30 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            <span>{downloadingSync ? 'Generando archivo...' : 'Exportar Archivo de Sincronización (.json)'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Tarjeta de Exportación XLSX */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
-          <div className="p-3 bg-orange-50 text-orange-700 rounded-xl">
+          <div className="p-3 bg-emerald-50 text-emerald-700 rounded-2xl">
             <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-extrabold text-lg text-slate-900">
-              Planilla Consolidada (.xlsx)
-            </h3>
+            <h3 className="font-black text-lg text-slate-900">Planilla de Reporte Excel (.xlsx)</h3>
             <p className="text-xs text-slate-500">
-              Exporta operaciones y catálogos de emprendimientos y productos
+              Exporta planillas visuales con ventas, retiros, stock y saldos para contabilidad o impresión
             </p>
           </div>
         </div>
@@ -154,13 +201,11 @@ export const ExportPage: React.FC = () => {
               onChange={(e) => setSelectedType(e.target.value)}
               className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none font-medium"
             >
-              <option value="TODO">Todas las Hojas</option>
+              <option value="TODO">Todas las Hojas (Ventas, Stock, Retiros, Saldos, Catálogo)</option>
               <option value="VENTAS">Sólo Ventas</option>
               <option value="STOCK">Sólo Stock y Existencias</option>
               <option value="RETIROS">Sólo Retiros de Efectivo</option>
               <option value="SALDOS">Sólo Resumen de Saldos Financieros</option>
-              <option value="EMPRENDIMIENTOS">Sólo Emprendimientos</option>
-              <option value="PRODUCTOS">Sólo Productos</option>
             </select>
           </div>
 
@@ -209,118 +254,39 @@ export const ExportPage: React.FC = () => {
 
         <button
           onClick={handleExportExcel}
-          className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold px-6 py-3 rounded-xl shadow-md shadow-orange-600/20 transition-all cursor-pointer"
+          className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-3 rounded-2xl shadow-sm transition-all cursor-pointer"
         >
           <Download className="w-5 h-5" />
-          <span>Descargar Excel (.xlsx)</span>
+          <span>Descargar Planilla Excel (.xlsx)</span>
         </button>
       </div>
 
-      {isAdmin && (
-        <div className="flex flex-col items-start gap-2">
-          <button
-            type="button"
-            onClick={handleOpenClearModal}
-            className="inline-flex items-center space-x-2 border border-rose-300 bg-white hover:bg-rose-50 text-rose-800 font-bold px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Vaciar todos los datos</span>
-          </button>
-          {clearFeedback && (
-            <p role="status" className="text-xs font-semibold text-emerald-700">
-              {clearFeedback}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Tarjeta de Backup JSON */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      {/* 3. Tarjeta de Backup Completo */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
-          <div className="p-3 bg-blue-50 text-blue-700 rounded-xl">
+          <div className="p-3 bg-blue-50 text-blue-700 rounded-2xl">
             <FileJson className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-extrabold text-lg text-slate-900">
-              Copia de Seguridad Completa (.json)
-            </h3>
+            <h3 className="font-black text-lg text-slate-900">Copia de Seguridad de la Base (.json)</h3>
             <p className="text-xs text-slate-500">
-              Archivo con la totalidad de registros para respaldo informático,
-              migración o diagnóstico
+              Volcado completo de la base de datos local para resguardo informático o reinstalación técnica
             </p>
           </div>
         </div>
 
         <p className="text-xs text-slate-500 leading-relaxed">
-          Este archivo contiene toda la base de datos local estructurada
-          (emprendimientos, productos, movimientos, ventas, retiros y
-          auditoría). Puedes guardarlo en una unidad USB como resguardo.
+          Guarda la totalidad de tablas de la base local en un archivo JSON crudo.
         </p>
 
         <button
           onClick={handleExportJson}
-          className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white font-extrabold px-6 py-3 rounded-xl shadow-md transition-all cursor-pointer"
+          className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white font-extrabold px-6 py-3 rounded-2xl shadow-xs transition-all cursor-pointer"
         >
           <Download className="w-5 h-5" />
-          <span>Descargar Backup JSON (.json)</span>
+          <span>Descargar Respaldo Total (.json)</span>
         </button>
       </div>
-
-      {isAdmin && showClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="clear-imports-title"
-            className="w-full max-w-md space-y-5 rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl"
-          >
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-rose-100 p-2.5 text-rose-700">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3
-                  id="clear-imports-title"
-                  className="text-lg font-black text-slate-900"
-                >
-                  ¿Estás seguro?
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  Esto no se puede deshacer. Asegúrate de descargar la planilla
-                  antes de borrarla. Se eliminarán todos los emprendimientos,
-                  productos, ventas, retiros, movimientos de stock, sesiones de
-                  caja e historiales para dejar los paneles sin datos.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
-              <button
-                type="button"
-                onClick={() => setShowClearModal(false)}
-                disabled={clearingImports}
-                className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleClearImportedData}
-                disabled={clearCountdown > 0 || clearingImports}
-                className="inline-flex min-w-44 items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>
-                  {clearingImports
-                    ? "Limpiando..."
-                    : clearCountdown > 0
-                      ? `Espera ${clearCountdown} s`
-                      : "Borrar todos los datos"}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

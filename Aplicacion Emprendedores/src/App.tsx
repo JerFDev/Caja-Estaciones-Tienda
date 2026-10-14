@@ -11,6 +11,7 @@ import { BalancesPage } from './pages/BalancesPage';
 import { ExportPage } from './pages/ExportPage';
 import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { MunicipalPage } from './pages/MunicipalPage';
 import { LoginPage } from './pages/LoginPage';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -70,6 +71,16 @@ export const App: React.FC = () => {
                 element={
                   <ProtectedRoute requiredRole="ADMIN">
                     <SettingsPage config={config} onConfigChange={setConfig} />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Gestión Municipal: Solo para ADMIN */}
+              <Route
+                path="municipal"
+                element={
+                  <ProtectedRoute requiredRole="ADMIN">
+                    <MunicipalPage />
                   </ProtectedRoute>
                 }
               />
