@@ -337,6 +337,7 @@ export const DashboardPage: React.FC = () => {
             products={filteredProducts}
             withdrawals={filteredWithdrawals}
             totalStockAvailable={totalStockAvailable}
+            selectedVentureId={filters.ventureId}
             onVoidSale={(s) => {
               setVoidingSale(s);
               setVoidReason('');

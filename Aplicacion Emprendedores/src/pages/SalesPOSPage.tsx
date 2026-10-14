@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   ShoppingCart,
@@ -27,8 +27,9 @@ import {
   Clock,
   Percent,
   Tag,
-} from "lucide-react";
-import { api } from "../services/api";
+  Users,
+} from 'lucide-react';
+import { api } from '../services/api';
 import {
   Producto,
   Venta,
@@ -39,8 +40,8 @@ import {
   SesionCajaActualInfo,
   DailySalesStats,
   SesionCaja,
-} from "../types";
-import { formatCurrency, formatDateTime } from "../utils/formatters";
+} from '../types';
+import { formatCurrency, formatDateTime } from '../utils/formatters';
 
 interface SalesPOSPageProps {
   config: Configuracion | null;
@@ -51,16 +52,16 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
   const [cajaInfo, setCajaInfo] = useState<SesionCajaActualInfo | null>(null);
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [openMontoInicial, setOpenMontoInicial] = useState<number>(0);
-  const [openTurno, setOpenTurno] = useState<"MANANA" | "TARDE">(
-    config?.turnoActual || "MANANA",
-  );
-  const [openObservaciones, setOpenObservaciones] = useState("");
+  const [openTurno, setOpenTurno] = useState<'MANANA' | 'TARDE'>(config?.turnoActual || 'MANANA');
+  const [openEncargado1Id, setOpenEncargado1Id] = useState<string>('');
+  const [openEncargado2Id, setOpenEncargado2Id] = useState<string>('');
+  const [openObservaciones, setOpenObservaciones] = useState('');
   const [openingCaja, setOpeningCaja] = useState(false);
 
   // Modal Cierre de Caja (Arqueo)
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeRealContado, setCloseRealContado] = useState<number>(0);
-  const [closeObservaciones, setCloseObservaciones] = useState("");
+  const [closeObservaciones, setCloseObservaciones] = useState('');
   const [closingCaja, setClosingCaja] = useState(false);
   const [closedSummary, setClosedSummary] = useState<SesionCaja | null>(null);
 
@@ -71,43 +72,90 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
 
   // Emprendimientos
   const [ventures, setVentures] = useState<Emprendimiento[]>([]);
-  const [selectedVenture, setSelectedVenture] = useState<Emprendimiento | null>(
-    null,
-  );
-  const [ventureSearch, setVentureSearch] = useState("");
+  const [selectedVenture, setSelectedVenture] = useState<Emprendimiento | null>(null);
+  const [ventureSearch, setVentureSearch] = useState('');
 
   // Productos
   const [allProducts, setAllProducts] = useState<Producto[]>([]);
   const [ventureProducts, setVentureProducts] = useState<Producto[]>([]);
-  const [productSearch, setProductSearch] = useState("");
+  const [productSearch, setProductSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
 
   // Venta
   const [quantity, setQuantity] = useState<number>(1);
-  const [metodoPago, setMetodoPago] = useState<MetodoPago>("EFECTIVO");
-  const [tipoCliente, setTipoCliente] = useState<TipoCliente>("RESIDENTE");
-  const [observaciones, setObservaciones] = useState("");
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
+  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('RESIDENTE');
+  const [observaciones, setObservaciones] = useState('');
   const [copiedAlias, setCopiedAlias] = useState(false);
 
   // Descuento
-  const [discountType, setDiscountType] = useState<"PORCENTAJE" | "MONTO">(
-    "PORCENTAJE",
-  );
+  const [discountType, setDiscountType] = useState<'PORCENTAJE' | 'MONTO'>('PORCENTAJE');
   const [discountValue, setDiscountValue] = useState<number>(0);
-  const [customDiscountInput, setCustomDiscountInput] = useState<string>("");
+  const [customDiscountInput, setCustomDiscountInput] = useState<string>('');
   const [showCustomAmount, setShowCustomAmount] = useState<boolean>(false);
 
   // Estado general
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showSaleSuccessPopup, setShowSaleSuccessPopup] = useState(false);
+  const [lastSaleInfo, setLastSaleInfo] = useState<{
+    total: number;
+    productoNombre: string;
+    productoCodigo: string;
+    cantidad: number;
+  } | null>(null);
 
   const ventureInputRef = useRef<HTMLInputElement>(null);
   const productInputRef = useRef<HTMLInputElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
+
+  // Bandera para evitar que el Enter de selección de producto dispare inmediatamente la venta en el mismo tick
+  const justSelectedRef = useRef<boolean>(false);
+
+  // Temporizador para mantener presionado los botones + y - en el modal de fondo de cambio
+  const repeatTimerRef = useRef<{ timeout?: any; interval?: any }>({});
+
+  const stopHold = () => {
+    if (repeatTimerRef.current.timeout) clearTimeout(repeatTimerRef.current.timeout);
+    if (repeatTimerRef.current.interval) clearInterval(repeatTimerRef.current.interval);
+    repeatTimerRef.current = {};
+  };
+
+  const startHold = (action: 'inc' | 'dec') => {
+    stopHold();
+    if (action === 'inc') {
+      setOpenMontoInicial((prev) => Math.round((prev + 100) / 100) * 100);
+    } else {
+      setOpenMontoInicial((prev) => Math.max(0, Math.round((prev - 100) / 100) * 100));
+    }
+    repeatTimerRef.current.timeout = setTimeout(() => {
+      repeatTimerRef.current.interval = setInterval(() => {
+        if (action === 'inc') {
+          setOpenMontoInicial((prev) => Math.round((prev + 100) / 100) * 100);
+        } else {
+          setOpenMontoInicial((prev) => Math.max(0, Math.round((prev - 100) / 100) * 100));
+        }
+      }, 70);
+    }, 320);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopHold();
+    };
+  }, []);
+
+  // Auto-cierre del pop up de venta tras 1.6 segundos y restablecimiento total de la caja
+  useEffect(() => {
+    if (!showSaleSuccessPopup) return;
+
+    const timer = setTimeout(() => {
+      setShowSaleSuccessPopup(false);
+      handleFullReset();
+    }, 1600);
+
+    return () => clearTimeout(timer);
+  }, [showSaleSuccessPopup]);
 
   // Carga inicial
   useEffect(() => {
@@ -124,9 +172,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
       setVentures(vList);
       setAllProducts(pList);
       setCajaInfo(caja);
-      setTimeout(() => ventureInputRef.current?.focus(), 150);
+      if (caja?.abierta) {
+        setTimeout(() => ventureInputRef.current?.focus(), 150);
+      }
     } catch (e: any) {
-      console.error("Error al cargar datos del POS:", e);
+      console.error('Error al cargar datos del POS:', e);
     }
   };
 
@@ -135,16 +185,14 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
       const caja = await api.getCashRegisterCurrentSession();
       setCajaInfo(caja);
     } catch (e: any) {
-      console.error("Error al actualizar estado de caja:", e);
+      console.error('Error al actualizar estado de caja:', e);
     }
   };
 
   // Filtrar productos cuando cambia el emprendimiento seleccionado
   useEffect(() => {
     if (selectedVenture) {
-      const prods = allProducts.filter(
-        (p) => p.emprendimientoId === selectedVenture.id,
-      );
+      const prods = allProducts.filter((p) => p.emprendimientoId === selectedVenture.id);
       setVentureProducts(prods);
     } else {
       setVentureProducts([]);
@@ -154,40 +202,58 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
   // Manejo de atajos de teclado (F1, F2, F3, F4, Escape, Enter)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Si hay un modal abierto, no capturar atajos de venta
-      if (showOpenModal || showCloseModal || showDailyStatsModal) return;
+      // Si la caja no está abierta o hay un modal abierto, no capturar atajos de venta
+      if (!cajaInfo?.abierta || showOpenModal || showCloseModal || showDailyStatsModal) return;
 
-      if (e.key === "F1") {
+      if (e.key === 'F1') {
         e.preventDefault();
-        setMetodoPago("EFECTIVO");
-      } else if (e.key === "F2") {
+        setMetodoPago('EFECTIVO');
+      } else if (e.key === 'F2') {
         e.preventDefault();
-        setMetodoPago("TRANSFERENCIA");
-      } else if (e.key === "F3") {
+        setMetodoPago('TRANSFERENCIA');
+      } else if (e.key === 'F3') {
         e.preventDefault();
-        setTipoCliente("RESIDENTE");
-      } else if (e.key === "F4") {
+        setTipoCliente('RESIDENTE');
+      } else if (e.key === 'F4') {
         e.preventDefault();
-        setTipoCliente("TURISTA");
-      } else if (e.key === "Escape") {
+        setTipoCliente('TURISTA');
+      } else if (e.key === 'Escape') {
         e.preventDefault();
+        if (showSaleSuccessPopup) {
+          setShowSaleSuccessPopup(false);
+          handleFullReset();
+          return;
+        }
         if (selectedProduct) {
           setSelectedProduct(null);
-          setProductSearch("");
+          setProductSearch('');
           productInputRef.current?.focus();
         } else if (selectedVenture) {
           setSelectedVenture(null);
-          setVentureSearch("");
+          setVentureSearch('');
           ventureInputRef.current?.focus();
         } else {
           ventureInputRef.current?.focus();
         }
-      } else if (e.key === "Enter") {
+      } else if (e.key === 'Enter') {
+        // Si el pop up de venta exitosa está abierto, cerrarlo al presionar Enter
+        if (showSaleSuccessPopup) {
+          e.preventDefault();
+          setShowSaleSuccessPopup(false);
+          handleFullReset();
+          return;
+        }
+
         // Si el foco está en un input de búsqueda, dejar que ese input gestione su propio Enter
         if (
           e.target === ventureInputRef.current ||
           e.target === productInputRef.current
         ) {
+          return;
+        }
+        // Si recién se acaba de seleccionar el producto con Enter, no disparar la venta en el mismo tick
+        if (justSelectedRef.current) {
+          e.preventDefault();
           return;
         }
         if (selectedProduct && !loading) {
@@ -197,67 +263,91 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    selectedProduct,
-    selectedVenture,
-    showOpenModal,
-    showCloseModal,
-    showDailyStatsModal,
-    loading,
-  ]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cajaInfo?.abierta, selectedProduct, selectedVenture, showOpenModal, showCloseModal, showDailyStatsModal, showSaleSuccessPopup, loading]);
+
+  const handleSelectVenture = (v: Emprendimiento) => {
+    setSelectedVenture(v);
+    setSelectedProduct(null);
+    setVentureSearch('');
+    setProductSearch('');
+    setFeedback(null);
+    setTimeout(() => productInputRef.current?.focus(), 100);
+  };
+
+  const handleSelectProduct = (p: Producto) => {
+    const v = ventures.find((ev) => ev.id === p.emprendimientoId);
+    if (v && (!selectedVenture || selectedVenture.id !== v.id)) {
+      setSelectedVenture(v);
+    }
+    setSelectedProduct(p);
+    setProductSearch(p.codigo);
+    setQuantity(1);
+    setFeedback(null);
+    justSelectedRef.current = true;
+    setTimeout(() => {
+      justSelectedRef.current = false;
+      quantityInputRef.current?.focus();
+    }, 250);
+  };
 
   // Búsqueda inteligente desde el campo de Emprendimiento Vendedor al presionar ENTER
   const handleVentureSearchEnter = () => {
     const raw = ventureSearch.trim().toUpperCase();
     if (!raw) return;
 
-    // 1. ¿Es código directo de un producto? (ej: AKM001 o akm001)
-    const exactProd = allProducts.find(
-      (p) => p.codigo.trim().toUpperCase() === raw,
-    );
+    // 1. ¿Es código directo de un producto? (ej: AKM001 o akm002)
+    const exactProd = allProducts.find((p) => p.codigo.trim().toUpperCase() === raw);
     if (exactProd) {
-      const v = ventures.find((ev) => ev.id === exactProd.emprendimientoId);
-      if (v) {
-        setSelectedVenture(v);
-      }
-      setSelectedProduct(exactProd);
-      setQuantity(1);
-      setVentureSearch("");
+      handleSelectProduct(exactProd);
+      setVentureSearch('');
       setFeedback({
-        type: "success",
+        type: 'success',
         message: `✓ ¡Producto seleccionado! [${exactProd.codigo}] ${exactProd.nombre} — ${formatCurrency(exactProd.precio)}`,
       });
-      setTimeout(() => quantityInputRef.current?.focus(), 100);
       return;
     }
 
     // 2. ¿Es código de un emprendimiento? (ej: AKM o akm)
-    const exactVenture = ventures.find(
-      (ev) => ev.codigo.trim().toUpperCase() === raw,
-    );
+    const exactVenture = ventures.find((ev) => ev.codigo.trim().toUpperCase() === raw);
     if (exactVenture) {
-      setSelectedVenture(exactVenture);
-      setSelectedProduct(null);
-      setVentureSearch("");
+      handleSelectVenture(exactVenture);
       setFeedback({
-        type: "success",
+        type: 'success',
         message: `✓ Emprendimiento seleccionado: [${exactVenture.codigo}] ${exactVenture.nombre}. Ahora seleccione el producto.`,
       });
-      setTimeout(() => productInputRef.current?.focus(), 100);
       return;
     }
 
-    // 3. Si hay emprendimientos filtrados en la lista, seleccionar el primero
+    // 3. ¿Empieza con este código de producto? (ej: si puso akm0)
+    const matchingProd = allProducts.find(
+      (p) =>
+        p.codigo.trim().toUpperCase().startsWith(raw) ||
+        p.codigo.trim().toUpperCase() === raw
+    );
+    if (matchingProd) {
+      handleSelectProduct(matchingProd);
+      setVentureSearch('');
+      return;
+    }
+
+    // 4. Si hay productos coincidentes en la lista global, seleccionar el primero
+    if (matchingProductsInVentureSearch.length > 0) {
+      handleSelectProduct(matchingProductsInVentureSearch[0]);
+      setVentureSearch('');
+      return;
+    }
+
+    // 5. Si hay emprendimientos filtrados en la lista, seleccionar el primero
     if (filteredVentures.length > 0) {
       handleSelectVenture(filteredVentures[0]);
       return;
     }
 
-    // 4. No encontrado
+    // 6. No encontrado
     setFeedback({
-      type: "error",
+      type: 'error',
       message: `❌ No se encontró ningún producto ni emprendimiento con "${ventureSearch.trim()}".`,
     });
     ventureInputRef.current?.focus();
@@ -268,73 +358,61 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
     const raw = productSearch.trim().toUpperCase();
     if (!raw) return;
 
-    // 1. Buscar en el emprendimiento actual
-    const exactProd = ventureProducts.find(
-      (p) => p.codigo.trim().toUpperCase() === raw,
-    );
+    // 1. Buscar en el emprendimiento actual (coincidencia exacta)
+    const exactProd = ventureProducts.find((p) => p.codigo.trim().toUpperCase() === raw);
     if (exactProd) {
       handleSelectProduct(exactProd);
       return;
     }
 
-    // 2. Si no es de este emprendimiento, buscar en todo el catálogo
-    const globalProd = allProducts.find(
-      (p) => p.codigo.trim().toUpperCase() === raw,
+    // 2. Coincidencia por prefijo o contiene en el emprendimiento actual
+    const partialVentureProd = ventureProducts.find(
+      (p) =>
+        p.codigo.trim().toUpperCase().startsWith(raw) ||
+        p.codigo.trim().toUpperCase().includes(raw) ||
+        p.nombre.trim().toUpperCase().includes(raw)
     );
-    if (globalProd) {
-      const newV = ventures.find((ev) => ev.id === globalProd.emprendimientoId);
-      if (newV) setSelectedVenture(newV);
-      setSelectedProduct(globalProd);
-      setQuantity(1);
-      setProductSearch("");
-      setFeedback({
-        type: "success",
-        message: `✓ ¡Producto seleccionado! [${globalProd.codigo}] ${globalProd.nombre} — ${formatCurrency(globalProd.precio)}`,
-      });
-      setTimeout(() => quantityInputRef.current?.focus(), 100);
+    if (partialVentureProd) {
+      handleSelectProduct(partialVentureProd);
       return;
     }
 
-    // 3. Si hay productos filtrados, seleccionar el primero
+    // 3. Buscar en todo el catálogo (coincidencia exacta o prefijo)
+    const globalProd = allProducts.find(
+      (p) =>
+        p.codigo.trim().toUpperCase() === raw ||
+        p.codigo.trim().toUpperCase().startsWith(raw)
+    );
+    if (globalProd) {
+      handleSelectProduct(globalProd);
+      return;
+    }
+
+    // 4. Si hay productos filtrados, seleccionar el primero
     if (filteredProducts.length > 0) {
       handleSelectProduct(filteredProducts[0]);
       return;
     }
 
     setFeedback({
-      type: "error",
+      type: 'error',
       message: `❌ No se encontró ningún producto con el código "${productSearch.trim()}".`,
     });
     productInputRef.current?.focus();
   };
 
-  const handleSelectVenture = (v: Emprendimiento) => {
-    setSelectedVenture(v);
+  const handleResetSale = (keepFeedback?: boolean | any) => {
     setSelectedProduct(null);
-    setVentureSearch("");
-    setProductSearch("");
-    setFeedback(null);
-    setTimeout(() => productInputRef.current?.focus(), 100);
-  };
-
-  const handleSelectProduct = (p: Producto) => {
-    setSelectedProduct(p);
-    setProductSearch(p.codigo);
+    setProductSearch('');
     setQuantity(1);
-    setFeedback(null);
-    setTimeout(() => quantityInputRef.current?.focus(), 100);
-  };
-
-  const handleResetSale = () => {
-    setSelectedProduct(null);
-    setProductSearch("");
-    setQuantity(1);
-    setObservaciones("");
+    setObservaciones('');
     setDiscountValue(0);
-    setCustomDiscountInput("");
-    setDiscountType("PORCENTAJE");
+    setCustomDiscountInput('');
+    setDiscountType('PORCENTAJE');
     setShowCustomAmount(false);
-    setFeedback(null);
+    if (keepFeedback !== true) {
+      setFeedback(null);
+    }
     setTimeout(() => {
       if (selectedVenture && productInputRef.current) {
         productInputRef.current.focus();
@@ -347,13 +425,13 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
   const handleFullReset = () => {
     setSelectedVenture(null);
     setSelectedProduct(null);
-    setVentureSearch("");
-    setProductSearch("");
+    setVentureSearch('');
+    setProductSearch('');
     setQuantity(1);
-    setObservaciones("");
+    setObservaciones('');
     setDiscountValue(0);
-    setCustomDiscountInput("");
-    setDiscountType("PORCENTAJE");
+    setCustomDiscountInput('');
+    setDiscountType('PORCENTAJE');
     setShowCustomAmount(false);
     setFeedback(null);
     setTimeout(() => ventureInputRef.current?.focus(), 100);
@@ -384,16 +462,16 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
 
-        oscillator.type = "triangle";
+        oscillator.type = 'triangle';
         oscillator.frequency.value = freq;
         gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(
           0.35,
-          audioContext.currentTime + 0.02 + index * 0.05,
+          audioContext.currentTime + 0.02 + index * 0.05
         );
         gainNode.gain.exponentialRampToValueAtTime(
           0.0001,
-          audioContext.currentTime + 0.28 + index * 0.08,
+          audioContext.currentTime + 0.28 + index * 0.08
         );
 
         oscillator.connect(gainNode);
@@ -404,7 +482,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
 
       setTimeout(() => audioContext.close(), 800);
     } catch (error) {
-      console.warn("No se pudo reproducir sonido de confirmación:", error);
+      console.warn('No se pudo reproducir sonido de confirmación:', error);
     }
   };
 
@@ -416,7 +494,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
     // Advertencia si la caja está cerrada
     if (!cajaInfo?.abierta) {
       const confirmOpen = window.confirm(
-        "⚠️ La caja registradora está CERRADA.\n\n¿Deseas abrir la caja antes de registrar esta venta para asentar el fondo de cambio?",
+        '⚠️ La caja registradora está CERRADA.\n\n¿Deseas abrir la caja antes de registrar esta venta para asentar el fondo de cambio?'
       );
       if (confirmOpen) {
         setShowOpenModal(true);
@@ -428,16 +506,13 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
     const permitirNegativo = config?.permitirStockNegativo ?? false;
 
     if (quantity <= 0) {
-      setFeedback({
-        type: "error",
-        message: "La cantidad debe ser mayor a 0.",
-      });
+      setFeedback({ type: 'error', message: 'La cantidad debe ser mayor a 0.' });
       return;
     }
 
     if (stockActual < quantity && !permitirNegativo) {
       setFeedback({
-        type: "error",
+        type: 'error',
         message: `Stock insuficiente. Disponible: ${stockActual}, solicitado: ${quantity}.`,
       });
       return;
@@ -455,9 +530,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
         observaciones: observaciones.trim() || undefined,
       });
 
-      setFeedback({
-        type: "success",
-        message: `¡Venta registrada con éxito! Total: ${formatCurrency(nuevaVenta.total)}${discountAmount > 0 ? ` (Descuento: -${formatCurrency(discountAmount)})` : ""} (${nuevaVenta.producto?.nombre})`,
+      setLastSaleInfo({
+        total: nuevaVenta.total,
+        productoNombre: nuevaVenta.producto?.nombre || selectedProduct.nombre,
+        productoCodigo: nuevaVenta.producto?.codigo || selectedProduct.codigo,
+        cantidad: quantity,
       });
       setShowSaleSuccessPopup(true);
       playSaleSuccessBell();
@@ -467,36 +544,61 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
       setAllProducts(updatedProducts);
       await refreshCajaStatus();
 
-      handleResetSale();
+      handleFullReset();
     } catch (err: any) {
-      setFeedback({
-        type: "error",
-        message: err.message || "Error al registrar venta.",
-      });
+      setFeedback({ type: 'error', message: err.message || 'Error al registrar venta.' });
     } finally {
       setLoading(false);
     }
   };
 
   // Apertura de Caja
+  const handleOpenAperturaModal = () => {
+    const guardado =
+      cajaInfo?.ultimoFondoCierre !== undefined
+        ? cajaInfo.ultimoFondoCierre
+        : Number(localStorage.getItem('ultimo_fondo_caja') || 0);
+    setOpenMontoInicial(guardado);
+    setOpenTurno(config?.turnoActual || 'MANANA');
+    setOpenEncargado1Id('');
+    setOpenEncargado2Id('');
+    setShowOpenModal(true);
+  };
+
   const handleOpenCajaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!openEncargado1Id || !openEncargado2Id) {
+      alert('Debes seleccionar 2 emprendimientos encargados de la caja para iniciar la jornada.');
+      return;
+    }
+    if (openEncargado1Id === openEncargado2Id) {
+      alert('Los 2 emprendimientos encargados deben ser distintos.');
+      return;
+    }
+
     try {
       setOpeningCaja(true);
       await api.openCashRegister({
         montoInicial: openMontoInicial,
         turno: openTurno,
+        encargado1Id: openEncargado1Id,
+        encargado2Id: openEncargado2Id,
         observaciones: openObservaciones,
       });
       setShowOpenModal(false);
-      setOpenObservaciones("");
+      setOpenObservaciones('');
+      const emp1 = ventures.find((v) => v.id === openEncargado1Id);
+      const emp2 = ventures.find((v) => v.id === openEncargado2Id);
       await refreshCajaStatus();
       setFeedback({
-        type: "success",
-        message: `Caja abierta con éxito. Fondo inicial: ${formatCurrency(openMontoInicial)} (Turno ${openTurno === "MANANA" ? "Mañana" : "Tarde"}).`,
+        type: 'success',
+        message: `Caja abierta con éxito. Fondo: ${formatCurrency(openMontoInicial)} (Turno ${
+          openTurno === 'MANANA' ? 'Mañana' : 'Tarde'
+        }). Encargados: [${emp1?.codigo}] ${emp1?.nombre} y [${emp2?.codigo}] ${emp2?.nombre}.`,
       });
+      setTimeout(() => ventureInputRef.current?.focus(), 250);
     } catch (err: any) {
-      alert(err.message || "Error al abrir caja");
+      alert(err.message || 'Error al abrir caja');
     } finally {
       setOpeningCaja(false);
     }
@@ -506,7 +608,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
   const handleOpenCloseModal = () => {
     const esperado = cajaInfo?.totalesEnVivo?.montoEsperadoEfectivo ?? 0;
     setCloseRealContado(esperado);
-    setCloseObservaciones("");
+    setCloseObservaciones('');
     setShowCloseModal(true);
   };
 
@@ -520,13 +622,15 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
       });
       setShowCloseModal(false);
       setClosedSummary(cerrada);
+      localStorage.setItem('ultimo_fondo_caja', String(closeRealContado));
+      handleFullReset();
       await refreshCajaStatus();
       setFeedback({
-        type: "success",
+        type: 'success',
         message: `Caja cerrada exitosamente. Arqueo completado.`,
       });
     } catch (err: any) {
-      alert(err.message || "Error al cerrar caja");
+      alert(err.message || 'Error al cerrar caja');
     } finally {
       setClosingCaja(false);
     }
@@ -540,7 +644,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
       const data = await api.getDailySalesStats();
       setDailyStats(data);
     } catch (err: any) {
-      console.error("Error cargando estadísticas del día:", err);
+      console.error('Error cargando estadísticas del día:', err);
     } finally {
       setLoadingDailyStats(false);
     }
@@ -553,17 +657,25 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
           v.codigo.toLowerCase().includes(ventureSearch.toLowerCase()) ||
           v.nombre.toLowerCase().includes(ventureSearch.toLowerCase()) ||
           v.responsable.toLowerCase().includes(ventureSearch.toLowerCase()) ||
-          (v.rubro &&
-            v.rubro.toLowerCase().includes(ventureSearch.toLowerCase())),
+          (v.rubro && v.rubro.toLowerCase().includes(ventureSearch.toLowerCase()))
       )
     : ventures;
+
+  // Filtrado de productos en búsqueda inicial (por código o nombre)
+  const matchingProductsInVentureSearch = ventureSearch.trim().length >= 2
+    ? allProducts.filter(
+        (p) =>
+          p.codigo.toLowerCase().includes(ventureSearch.toLowerCase()) ||
+          p.nombre.toLowerCase().includes(ventureSearch.toLowerCase())
+      )
+    : [];
 
   // Filtrado de productos
   const filteredProducts = productSearch.trim()
     ? ventureProducts.filter(
         (p) =>
           p.codigo.toLowerCase().includes(productSearch.toLowerCase()) ||
-          p.nombre.toLowerCase().includes(productSearch.toLowerCase()),
+          p.nombre.toLowerCase().includes(productSearch.toLowerCase())
       )
     : ventureProducts;
 
@@ -573,301 +685,219 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
 
   const discountAmount = Math.max(
     0,
-    discountType === "PORCENTAJE"
+    discountType === 'PORCENTAJE'
       ? Math.round(subtotalOperacion * (discountValue / 100) * 100) / 100
-      : Math.min(subtotalOperacion, discountValue),
+      : Math.min(subtotalOperacion, discountValue)
   );
 
-  const totalOperacion = Math.max(
-    0,
-    Math.round((subtotalOperacion - discountAmount) * 100) / 100,
-  );
-  const hayStockSuficiente =
-    stockActual >= quantity || (config?.permitirStockNegativo ?? false);
+  const totalOperacion = Math.max(0, Math.round((subtotalOperacion - discountAmount) * 100) / 100);
+  const hayStockSuficiente = stockActual >= quantity || (config?.permitirStockNegativo ?? false);
 
   const esperadoCaja = cajaInfo?.totalesEnVivo?.montoEsperadoEfectivo ?? 0;
-  const diferenciaArqueo =
-    Math.round((closeRealContado - esperadoCaja) * 100) / 100;
+  const diferenciaArqueo = Math.round((closeRealContado - esperadoCaja) * 100) / 100;
 
   return (
     <div className="h-full flex flex-col space-y-3">
-      {/* ============================================================ */}
-      {/* BARRA SUPERIOR: CONTROL DE CAJA Y ACCESOS RÁPIDOS */}
-      {/* ============================================================ */}
-      <div className="bg-gradient-to-r from-orange-500 via-orange-600 to-amber-600 rounded-3xl border-2 border-orange-600/30 px-5 py-3.5 shadow-md flex flex-wrap items-center justify-between gap-3 shrink-0 text-white">
-        {/* Título de Sección */}
-        <div className="flex items-center space-x-3 mr-2">
-          <div className="p-2.5 bg-white/20 text-white rounded-2xl backdrop-blur-xs shadow-xs">
-            <ShoppingCart className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-black text-white leading-tight">
-              Caja (POS)
-            </h2>
-            <p className="text-[11px] font-bold text-orange-100">
-              Terminal de Cobro Rápido
-            </p>
+      {cajaInfo === null ? (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center space-y-4 max-w-md w-full">
+            <RefreshCw className="w-8 h-8 text-orange-500 animate-spin mx-auto" />
+            <p className="text-sm font-bold text-slate-500">Cargando terminal de cobro...</p>
           </div>
         </div>
+      ) : !cajaInfo.abierta ? (
+        /* VISTA DE CAJA CERRADA: SOLO UN CUADRO GRANDE NARANJA CON BOTÓN VERDE RESUMIDO */
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 rounded-3xl border-2 border-orange-400/40 p-10 sm:p-16 text-center max-w-3xl w-full shadow-2xl shadow-orange-950/25 text-white space-y-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-24 h-24 rounded-3xl bg-white/20 backdrop-blur-xs flex items-center justify-center mx-auto text-white shadow-inner">
+              <Lock className="w-12 h-12" />
+            </div>
 
-        {/* Estado de Caja */}
-        <div className="flex items-center space-x-3 flex-wrap gap-y-2">
-          {cajaInfo?.abierta ? (
-            <div className="flex items-center space-x-2.5 bg-white text-emerald-950 border-2 border-emerald-300 px-4 py-2 rounded-2xl text-xs font-black shadow-sm">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <div className="flex items-center space-x-2 flex-wrap">
-                <span>Caja Abierta</span>
-                <span className="text-emerald-400">•</span>
-                <span>
-                  Fondo: {formatCurrency(cajaInfo.sesion?.montoInicial ?? 0)}
-                </span>
-                <span className="text-emerald-400">•</span>
-                <span>
-                  Turno:{" "}
-                  {cajaInfo.sesion?.turno === "MANANA" ? "Mañana" : "Tarde"}
-                </span>
-                {cajaInfo.totalesEnVivo && (
-                  <>
-                    <span className="text-emerald-400">•</span>
-                    <span className="font-black text-slate-900 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">
-                      En Cajón:{" "}
-                      {formatCurrency(
-                        cajaInfo.totalesEnVivo.montoEsperadoEfectivo,
-                      )}
-                    </span>
-                  </>
-                )}
+            <div className="space-y-3">
+              <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                Caja Registradora Cerrada
+              </h2>
+              <p className="text-base sm:text-lg text-orange-100 font-medium leading-relaxed max-w-xl mx-auto">
+                Para comenzar a registrar ventas, inicia el turno abriendo la caja con el fondo de cambio.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleOpenAperturaModal}
+                className="inline-flex items-center space-x-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xl sm:text-2xl px-12 py-5 rounded-2xl shadow-xl shadow-emerald-950/30 border-2 border-emerald-400 transition-all cursor-pointer"
+              >
+                <Unlock className="w-7 h-7" />
+                <span>Abrir Caja</span>
+              </button>
+            </div>
+
+            <div className="pt-2">
+              <div className="inline-flex items-center space-x-2 bg-black/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs sm:text-sm text-orange-100 border border-white/10 font-bold">
+                <span>Turno sugerido:</span>
+                <span className="text-white capitalize font-black">{config?.turnoActual === 'MANANA' ? 'Mañana' : 'Tarde'}</span>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center space-x-2 bg-white text-rose-800 border-2 border-rose-300 px-4 py-2 rounded-2xl text-xs font-black shadow-sm">
-              <Lock className="w-4 h-4 text-rose-600" />
-              <span>Caja Cerrada</span>
-            </div>
-          )}
-
-          {/* Botón de Apertura / Cierre */}
-          {cajaInfo?.abierta ? (
-            <button
-              type="button"
-              onClick={handleOpenCloseModal}
-              className="inline-flex items-center space-x-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black px-4 py-2 rounded-2xl text-xs shadow-md border-2 border-rose-400 transition-all cursor-pointer"
-            >
-              <Lock className="w-4 h-4 text-white" />
-              <span>Cerrar Caja (Arqueo)</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setOpenMontoInicial(0);
-                setOpenTurno(config?.turnoActual || "MANANA");
-                setShowOpenModal(true);
-              }}
-              className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black px-5 py-2.5 rounded-2xl text-xs sm:text-sm shadow-lg border-2 border-emerald-400 transition-all cursor-pointer animate-pulse"
-            >
-              <Unlock className="w-4 h-4" />
-              <span>Abrir Caja para Iniciar Turno</span>
-            </button>
-          )}
-        </div>
-
-        {/* Botón Ventas del Día y Estadísticas */}
-        <div className="flex items-center space-x-3">
-          <button
-            type="button"
-            onClick={handleOpenDailyStats}
-            className="inline-flex items-center space-x-2 bg-white hover:bg-orange-50 text-slate-900 font-black px-4 py-2 rounded-2xl text-xs border-2 border-white shadow-md transition-all cursor-pointer active:scale-95"
-          >
-            <BarChart3 className="w-4 h-4 text-orange-600" />
-            <span>Ventas del Día</span>
-            {cajaInfo?.totalesEnVivo && (
-              <span className="font-mono bg-orange-100 text-orange-950 px-2.5 py-0.5 rounded-lg border border-orange-200 font-black">
-                {formatCurrency(cajaInfo.totalesEnVivo.totalVentas)}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Barra de feedback / alertas */}
-      {feedback && (
-        <div
-          className={`px-5 py-3 rounded-2xl flex items-center justify-between border-2 shadow-xs shrink-0 ${
-            feedback.type === "success"
-              ? "bg-orange-50 text-orange-950 border-orange-300"
-              : "bg-red-50 text-red-900 border-red-300"
-          }`}
-        >
-          <div className="flex items-center space-x-3">
-            {feedback.type === "success" ? (
-              <CheckCircle className="w-6 h-6 text-orange-600 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
-            )}
-            <span className="font-black text-sm sm:text-base">
-              {feedback.message}
-            </span>
           </div>
-          <button
-            onClick={() => setFeedback(null)}
-            className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"
-          >
-            <XCircle className="w-6 h-6" />
-          </button>
         </div>
-      )}
-
-      {showSaleSuccessPopup && (
+      ) : (
+        /* VISTA NORMAL DE CAJA ABIERTA */
         <>
-          <style>{`
-            @keyframes saleCurtain {
-              0% {
-                transform: translateY(-120%);
-                opacity: 0;
-                border-radius: 0 0 50% 50%;
-              }
-              20% {
-                opacity: 1;
-              }
-              100% {
-                transform: translateY(0%);
-                opacity: 1;
-                border-radius: 0 0 36% 36%;
-              }
-            }
-
-            @keyframes saleButtonBounce {
-              0% {
-                transform: scale(0.8);
-              }
-              45% {
-                transform: scale(1.08);
-              }
-              70% {
-                transform: scale(0.98);
-              }
-              100% {
-                transform: scale(1);
-              }
-            }
-
-            @keyframes saleCheckDraw {
-              0% {
-                stroke-dasharray: 0 100;
-                opacity: 0;
-              }
-              100% {
-                stroke-dasharray: 100 100;
-                opacity: 1;
-              }
-            }
-
-            @keyframes salePulse {
-              0% {
-                transform: scale(0.9);
-                opacity: 0.9;
-              }
-              70% {
-                transform: scale(1.4);
-                opacity: 0;
-              }
-              100% {
-                transform: scale(1.7);
-                opacity: 0;
-              }
-            }
-          `}</style>
-
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-sky-950/10 backdrop-blur-[2px]">
-            <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
-              <div
-                className="absolute inset-x-[-12%] top-0 bottom-0 bg-gradient-to-b from-sky-200 via-sky-400 to-blue-700 shadow-[0_30px_70px_rgba(59,130,246,0.25)]"
-                style={{
-                  animation:
-                    "saleCurtain 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                }}
-              />
-              <div
-                className="absolute inset-x-[-10%] top-0 bottom-0 bg-gradient-to-r from-cyan-300/80 via-sky-300/80 to-blue-600/80 blur-[2px]"
-                style={{
-                  animation:
-                    "saleCurtain 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                }}
-              />
-
-              <div className="relative z-10 flex flex-col items-center justify-center text-center">
-                <div className="relative flex h-28 w-28 items-center justify-center">
-                  <span
-                    className="absolute inset-0 rounded-full border-4 border-white/50"
-                    style={{
-                      animation: "salePulse 1.2s ease-out 0.7s infinite",
-                    }}
-                  />
-                  <span
-                    className="absolute inset-[-12px] rounded-full border-4 border-lime-200/80"
-                    style={{
-                      animation: "salePulse 1.2s ease-out 0.35s infinite",
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowSaleSuccessPopup(false)}
-                    className="relative z-10 flex h-24 w-24 cursor-pointer items-center justify-center rounded-full border-4 border-white/80 bg-gradient-to-br from-lime-300 via-green-400 to-emerald-500 shadow-[0_18px_35px_rgba(16,185,129,0.45)] transition-transform duration-200 hover:scale-105"
-                    style={{
-                      animation:
-                        "saleButtonBounce 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.9s both",
-                    }}
-                    aria-label="Cerrar confirmación de venta"
-                  >
-                    <svg
-                      viewBox="0 0 52 52"
-                      className="h-12 w-12"
-                      style={{
-                        animation: "saleCheckDraw 0.6s ease-out 1.3s both",
-                      }}
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M14 27.5L22 35L39 18"
-                        fill="none"
-                        stroke="white"
-                        strokeWidth="6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeDasharray="100"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="mt-7 flex max-w-md flex-col items-center text-center text-white drop-shadow-[0_4px_10px_rgba(14,116,144,0.45)]">
-                  <p className="text-2xl font-black leading-snug">
-                    ¡Felicitaciones!
-                  </p>
-                  <p className="mt-1 text-2xl font-black leading-snug">
-                    Se vendió tu producto
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowSaleSuccessPopup(false)}
-                    className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-white/90 underline decoration-white/70 underline-offset-4 transition-opacity hover:opacity-100"
-                  >
-                    Hacé clic para cerrar
-                  </button>
-                </div>
+          {/* BARRA SUPERIOR: CONTROL DE CAJA Y ACCESOS RÁPIDOS */}
+          <div className="bg-gradient-to-r from-orange-500 via-orange-600 to-amber-600 rounded-3xl border-2 border-orange-600/30 px-5 py-3.5 shadow-md flex flex-wrap items-center justify-between gap-3 shrink-0 text-white">
+            {/* Título de Sección */}
+            <div className="flex items-center space-x-3 mr-2">
+              <div className="p-2.5 bg-white/20 text-white rounded-2xl backdrop-blur-xs shadow-xs">
+                <ShoppingCart className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-white leading-tight">Caja (POS)</h2>
+                <p className="text-[11px] font-bold text-orange-100">Terminal de Cobro Rápido</p>
               </div>
             </div>
-          </div>
-        </>
-      )}
 
-      {/* ============================================================ */}
-      {/* CONTENEDOR PRINCIPAL POS: ANCHO AMPLIADO (MAX-W-5XL) Y ERGONÓMICO */}
-      {/* ============================================================ */}
-      <div className="flex-1 overflow-y-auto max-w-5xl w-full mx-auto pb-10">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-7">
+            {/* Estado de Caja */}
+            <div className="flex items-center space-x-3 flex-wrap gap-y-2">
+              <div className="flex items-center space-x-2.5 bg-white text-emerald-950 border-2 border-emerald-300 px-4 py-2 rounded-2xl text-xs font-black shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div className="flex items-center space-x-2 flex-wrap">
+                  <span>Caja Abierta</span>
+                  <span className="text-emerald-400">•</span>
+                  <span>Fondo: {formatCurrency(cajaInfo.sesion?.montoInicial ?? 0)}</span>
+                  <span className="text-emerald-400">•</span>
+                  <span>Turno: {cajaInfo.sesion?.turno === 'MANANA' ? 'Mañana' : 'Tarde'}</span>
+                  {cajaInfo.totalesEnVivo && (
+                    <>
+                      <span className="text-emerald-400">•</span>
+                      <span className="font-black text-slate-900 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">
+                        En Cajón: {formatCurrency(cajaInfo.totalesEnVivo.montoEsperadoEfectivo)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Encargados del Turno */}
+              {cajaInfo.sesion?.encargadosTexto && (
+                <div className="flex items-center space-x-2 bg-black/20 text-white border border-white/20 px-3.5 py-2 rounded-2xl text-xs font-bold backdrop-blur-xs">
+                  <Users className="w-4 h-4 text-orange-200 shrink-0" />
+                  <span className="text-orange-200 font-extrabold uppercase text-[10px] tracking-wider">Encargados:</span>
+                  <span className="truncate max-w-[220px] sm:max-w-xs md:max-w-md font-black">{cajaInfo.sesion.encargadosTexto}</span>
+                </div>
+              )}
+
+              {/* Botón Cerrar Caja */}
+              <button
+                type="button"
+                onClick={handleOpenCloseModal}
+                className="inline-flex items-center space-x-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black px-4 py-2 rounded-2xl text-xs shadow-md border-2 border-rose-400 transition-all cursor-pointer"
+              >
+                <Lock className="w-4 h-4 text-white" />
+                <span>Cerrar Caja (Arqueo)</span>
+              </button>
+            </div>
+
+            {/* Botón Ventas del Día y Estadísticas */}
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={handleOpenDailyStats}
+                className="inline-flex items-center space-x-2 bg-white hover:bg-orange-50 text-slate-900 font-black px-4 py-2 rounded-2xl text-xs border-2 border-white shadow-md transition-all cursor-pointer active:scale-95"
+              >
+                <BarChart3 className="w-4 h-4 text-orange-600" />
+                <span>Ventas del Día</span>
+                {cajaInfo?.totalesEnVivo && (
+                  <span className="font-mono bg-orange-100 text-orange-950 px-2.5 py-0.5 rounded-lg border border-orange-200 font-black">
+                    {formatCurrency(cajaInfo.totalesEnVivo.totalVentas)}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Barra de feedback / alertas */}
+          {feedback && (
+            <div
+              className={`px-5 py-3 rounded-2xl flex items-center justify-between border-2 shadow-xs shrink-0 ${
+                feedback.type === 'success'
+                  ? 'bg-orange-50 text-orange-950 border-orange-300'
+                  : 'bg-red-50 text-red-900 border-red-300'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                {feedback.type === 'success' ? (
+                  <CheckCircle className="w-6 h-6 text-orange-600 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
+                )}
+                <span className="font-black text-sm sm:text-base">{feedback.message}</span>
+              </div>
+              <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+          )}
+
+          {showSaleSuccessPopup && (
+            <div
+              onClick={() => {
+                setShowSaleSuccessPopup(false);
+                handleFullReset();
+              }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-[2px] cursor-pointer animate-in fade-in duration-150"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-200/80 flex flex-col items-center text-center animate-in zoom-in-95 duration-150"
+              >
+                {/* Ícono de tilde verde minimalista */}
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shadow-xs mb-3.5">
+                  <Check className="w-8 h-8 stroke-[3]" />
+                </div>
+
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1 rounded-full">
+                  Venta Registrada
+                </span>
+
+                {lastSaleInfo ? (
+                  <div className="my-3">
+                    <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                      {formatCurrency(lastSaleInfo.total)}
+                    </p>
+                    <p className="mt-1.5 text-xs sm:text-sm text-slate-500 font-bold max-w-xs truncate">
+                      <span className="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded mr-1.5">
+                        {lastSaleInfo.productoCodigo}
+                      </span>
+                      {lastSaleInfo.productoNombre}
+                      {lastSaleInfo.cantidad > 1 && ` (x${lastSaleInfo.cantidad})`}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xl font-black text-slate-900 my-3">
+                    ¡Operación exitosa!
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSaleSuccessPopup(false);
+                    handleFullReset();
+                  }}
+                  className="mt-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-sm font-black rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                >
+                  <span>Continuar</span>
+                  <span className="text-xs font-normal opacity-75">(Enter)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* CONTENEDOR PRINCIPAL POS: ANCHO AMPLIADO (MAX-W-5XL) Y ERGONÓMICO */}
+          <div className="flex-1 overflow-y-auto max-w-5xl w-full mx-auto pb-10">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-7 animate-in fade-in duration-200">
+
           {/* 1. SELECCIÓN DE EMPRENDIMIENTO */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -900,7 +930,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     value={ventureSearch}
                     onChange={(e) => setVentureSearch(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         handleVentureSearchEnter();
                       }
@@ -909,26 +939,89 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   />
                 </div>
 
-                {/* Grid de emprendimientos */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-2 bg-slate-50 rounded-2xl border border-slate-200">
-                  {filteredVentures.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => handleSelectVenture(v)}
-                      className="p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-500 hover:bg-orange-50 text-left transition-all cursor-pointer shadow-xs group"
-                    >
-                      <span className="font-mono text-xs font-black bg-slate-100 group-hover:bg-orange-100 text-slate-800 group-hover:text-orange-800 px-2 py-0.5 rounded-md">
-                        {v.codigo}
-                      </span>
-                      <p className="font-extrabold text-sm text-slate-900 truncate mt-1.5">
-                        {v.nombre}
+                {/* Grid de emprendimientos y productos coincidentes */}
+                <div className="max-h-72 overflow-y-auto p-2.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  {/* Emprendimientos */}
+                  {filteredVentures.length > 0 && (
+                    <div>
+                      {ventureSearch.trim().length >= 2 && (
+                        <p className="text-[11px] font-black text-slate-500 uppercase px-1 mb-1.5 tracking-wider">
+                          Emprendimientos ({filteredVentures.length})
+                        </p>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                        {filteredVentures.map((v) => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => handleSelectVenture(v)}
+                            className="p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-500 hover:bg-orange-50 text-left transition-all cursor-pointer shadow-xs group"
+                          >
+                            <span className="font-mono text-xs font-black bg-slate-100 group-hover:bg-orange-100 text-slate-800 group-hover:text-orange-800 px-2 py-0.5 rounded-md">
+                              {v.codigo}
+                            </span>
+                            <p className="font-extrabold text-sm text-slate-900 truncate mt-1.5">{v.nombre}</p>
+                            <p className="text-xs text-slate-400 truncate mt-0.5">{v.responsable}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Productos coincidentes (cuando escribe código de producto ej: akm0, akm002, etc.) */}
+                  {matchingProductsInVentureSearch.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-black text-orange-700 uppercase px-1 mb-1.5 tracking-wider">
+                        Productos Coincidentes ({matchingProductsInVentureSearch.length})
                       </p>
-                      <p className="text-xs text-slate-400 truncate mt-0.5">
-                        {v.responsable}
-                      </p>
-                    </button>
-                  ))}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                        {matchingProductsInVentureSearch.slice(0, 18).map((p) => {
+                          const v = ventures.find((item) => item.id === p.emprendimientoId);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleSelectProduct(p)}
+                              className="p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-500 hover:bg-orange-50 flex items-center justify-between text-left transition-all cursor-pointer shadow-xs group"
+                            >
+                              <div className="truncate mr-2">
+                                <div className="flex items-center space-x-1.5">
+                                  <span className="font-mono text-xs font-black bg-orange-100 text-orange-800 px-2 py-0.5 rounded-md">
+                                    {p.codigo}
+                                  </span>
+                                  {v && (
+                                    <span className="text-[11px] font-bold text-slate-400 truncate">
+                                      {v.nombre}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="font-extrabold text-sm text-slate-900 truncate mt-1">{p.nombre}</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="font-black text-orange-600 text-base block">
+                                  {formatCurrency(p.precio)}
+                                </span>
+                                <span
+                                  className={`text-[11px] font-bold ${
+                                    (p.stockCalculado ?? 0) > 0 ? 'text-emerald-700' : 'text-red-500'
+                                  }`}
+                                >
+                                  Stock: {p.stockCalculado ?? 0}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sin resultados */}
+                  {filteredVentures.length === 0 && matchingProductsInVentureSearch.length === 0 && (
+                    <div className="py-8 text-center text-sm text-slate-400 font-bold">
+                      No se encontraron emprendimientos ni productos con "{ventureSearch.trim()}".
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -938,15 +1031,9 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     {selectedVenture.codigo}
                   </span>
                   <div>
-                    <h3 className="font-black text-slate-900 text-lg sm:text-xl leading-tight">
-                      {selectedVenture.nombre}
-                    </h3>
+                    <h3 className="font-black text-slate-900 text-lg sm:text-xl leading-tight">{selectedVenture.nombre}</h3>
                     <p className="text-xs sm:text-sm font-bold text-slate-700 mt-0.5">
-                      Titular:{" "}
-                      <strong className="text-slate-900">
-                        {selectedVenture.responsable}
-                      </strong>{" "}
-                      • {ventureProducts.length} productos en catálogo
+                      Titular: <strong className="text-slate-900">{selectedVenture.responsable}</strong> • {ventureProducts.length} productos en catálogo
                     </p>
                   </div>
                 </div>
@@ -962,9 +1049,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
           </div>
 
           {/* 2. SELECCIÓN DE PRODUCTO */}
-          <div
-            className={`space-y-3 ${selectedVenture ? "opacity-100" : "opacity-40 pointer-events-none"}`}
-          >
+          <div className={`space-y-3 ${selectedVenture ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
             <div className="flex items-center justify-between">
               <label className="text-sm font-black uppercase tracking-wider text-slate-700 flex items-center space-x-2.5">
                 <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">
@@ -975,7 +1060,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
               {selectedProduct && (
                 <button
                   type="button"
-                  onClick={handleResetSale}
+                  onClick={() => handleResetSale()}
                   className="text-xs sm:text-sm text-orange-600 hover:text-orange-700 font-black underline cursor-pointer"
                 >
                   Elegir otro producto
@@ -993,19 +1078,12 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     placeholder={
                       selectedVenture
                         ? `Escribe código o nombre del producto de ${selectedVenture.nombre}...`
-                        : "Primero selecciona un emprendimiento arriba"
+                        : 'Primero selecciona un emprendimiento arriba'
                     }
                     value={productSearch}
-                    onChange={(e) => {
-                      setProductSearch(e.target.value);
-                      const clean = e.target.value.trim().toUpperCase();
-                      const exact = ventureProducts.find(
-                        (p) => p.codigo.toUpperCase() === clean,
-                      );
-                      if (exact) handleSelectProduct(exact);
-                    }}
+                    onChange={(e) => setProductSearch(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         handleProductSearchEnter();
                       }
@@ -1032,9 +1110,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                           <span className="font-mono text-xs font-black bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md">
                             {p.codigo}
                           </span>
-                          <p className="font-bold text-sm text-slate-900 truncate mt-1">
-                            {p.nombre}
-                          </p>
+                          <p className="font-bold text-sm text-slate-900 truncate mt-1">{p.nombre}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <span className="font-black text-orange-600 text-base block">
@@ -1042,9 +1118,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                           </span>
                           <span
                             className={`text-xs font-bold ${
-                              (p.stockCalculado ?? 0) > 0
-                                ? "text-emerald-700"
-                                : "text-red-500"
+                              (p.stockCalculado ?? 0) > 0 ? 'text-emerald-700' : 'text-red-500'
                             }`}
                           >
                             Stock: {p.stockCalculado ?? 0}
@@ -1062,16 +1136,14 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     <span className="font-mono text-sm font-black bg-orange-100 text-orange-800 px-2.5 py-1 rounded-lg">
                       {selectedProduct.codigo}
                     </span>
-                    <h4 className="text-lg sm:text-xl font-extrabold text-slate-900">
-                      {selectedProduct.nombre}
-                    </h4>
+                    <h4 className="text-lg sm:text-xl font-extrabold text-slate-900">{selectedProduct.nombre}</h4>
                   </div>
                   <div className="flex items-center space-x-3 mt-1.5 text-xs sm:text-sm text-slate-600 font-semibold">
                     <span>
-                      Stock disponible:{" "}
+                      Stock disponible:{' '}
                       <strong
                         className={`font-black ${
-                          stockActual > 0 ? "text-emerald-700" : "text-red-600"
+                          stockActual > 0 ? 'text-emerald-700' : 'text-red-600'
                         }`}
                       >
                         {stockActual} u.
@@ -1080,12 +1152,8 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-slate-400 font-bold uppercase block">
-                    Precio Unitario
-                  </span>
-                  <span className="text-2xl sm:text-3xl font-black text-slate-900">
-                    {formatCurrency(precioUnitario)}
-                  </span>
+                  <span className="text-xs text-slate-400 font-bold uppercase block">Precio Unitario</span>
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900">{formatCurrency(precioUnitario)}</span>
                 </div>
               </div>
             )}
@@ -1122,12 +1190,12 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                       type="number"
                       min="1"
                       value={quantity}
-                      onChange={(e) =>
-                        setQuantity(Math.max(1, parseInt(e.target.value) || 1))
-                      }
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (e.key === 'Enter') {
                           e.preventDefault();
+                          e.stopPropagation();
+                          if (justSelectedRef.current) return;
                           handleSubmitSale();
                         }
                       }}
@@ -1151,11 +1219,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   <div className="grid grid-cols-2 gap-3 h-14">
                     <button
                       type="button"
-                      onClick={() => setMetodoPago("EFECTIVO")}
+                      onClick={() => setMetodoPago('EFECTIVO')}
                       className={`rounded-2xl border-2 flex items-center justify-center space-x-2 font-black text-sm sm:text-base transition-all cursor-pointer ${
-                        metodoPago === "EFECTIVO"
-                          ? "border-emerald-600 bg-emerald-100 text-emerald-950 shadow-sm"
-                          : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                        metodoPago === 'EFECTIVO'
+                          ? 'border-emerald-600 bg-emerald-100 text-emerald-950 shadow-sm'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                       }`}
                     >
                       <Banknote className="w-6 h-6 text-emerald-600 shrink-0" />
@@ -1164,11 +1232,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
 
                     <button
                       type="button"
-                      onClick={() => setMetodoPago("TRANSFERENCIA")}
+                      onClick={() => setMetodoPago('TRANSFERENCIA')}
                       className={`rounded-2xl border-2 flex items-center justify-center space-x-2 font-black text-sm sm:text-base transition-all cursor-pointer ${
-                        metodoPago === "TRANSFERENCIA"
-                          ? "border-blue-600 bg-blue-100 text-blue-950 shadow-sm"
-                          : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                        metodoPago === 'TRANSFERENCIA'
+                          ? 'border-blue-600 bg-blue-100 text-blue-950 shadow-sm'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                       }`}
                     >
                       <Smartphone className="w-6 h-6 text-blue-600 shrink-0" />
@@ -1179,7 +1247,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
               </div>
 
               {/* Si es Transferencia: Tarjeta Limpia y Destacada del Alias */}
-              {metodoPago === "TRANSFERENCIA" && selectedVenture && (
+              {metodoPago === 'TRANSFERENCIA' && selectedVenture && (
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-5 shadow-lg border-2 border-blue-700 space-y-3 animate-in fade-in duration-150">
                   <div className="flex items-center space-x-2.5">
                     <Smartphone className="w-5 h-5 text-blue-300" />
@@ -1194,22 +1262,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         Alias para Transferencia
                       </span>
                       <p className="font-mono text-2xl sm:text-3xl font-black text-white tracking-wide mt-1 select-all">
-                        {selectedVenture.alias || "SIN ALIAS REGISTRADO"}
+                        {selectedVenture.alias || 'SIN ALIAS REGISTRADO'}
                       </p>
                       <p className="text-xs sm:text-sm text-blue-200 font-semibold mt-1">
-                        Titular:{" "}
-                        <strong className="text-white">
-                          {selectedVenture.responsable}
-                        </strong>
-                        {selectedVenture.cvu && (
-                          <span>
-                            {" "}
-                            • CVU:{" "}
-                            <strong className="text-white font-mono">
-                              {selectedVenture.cvu}
-                            </strong>
-                          </span>
-                        )}
+                        Titular: <strong className="text-white">{selectedVenture.responsable}</strong>
+                        {selectedVenture.cvu && <span> • CVU: <strong className="text-white font-mono">{selectedVenture.cvu}</strong></span>}
                       </p>
                     </div>
 
@@ -1219,14 +1276,8 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         onClick={handleCopyAlias}
                         className="inline-flex items-center space-x-2 bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-3 rounded-2xl text-sm transition-colors shadow-md cursor-pointer self-start sm:self-center shrink-0"
                       >
-                        {copiedAlias ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                        <span>
-                          {copiedAlias ? "¡Copiado!" : "Copiar Alias"}
-                        </span>
+                        {copiedAlias ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        <span>{copiedAlias ? '¡Copiado!' : 'Copiar Alias'}</span>
                       </button>
                     )}
                   </div>
@@ -1242,11 +1293,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   <div className="grid grid-cols-2 gap-3 h-12">
                     <button
                       type="button"
-                      onClick={() => setTipoCliente("RESIDENTE")}
+                      onClick={() => setTipoCliente('RESIDENTE')}
                       className={`rounded-2xl border-2 flex items-center justify-center space-x-2 font-black text-sm transition-all cursor-pointer ${
-                        tipoCliente === "RESIDENTE"
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-900 shadow-xs"
-                          : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                        tipoCliente === 'RESIDENTE'
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 shadow-xs'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                       }`}
                     >
                       <MapPin className="w-4 h-4 text-indigo-600" />
@@ -1255,11 +1306,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
 
                     <button
                       type="button"
-                      onClick={() => setTipoCliente("TURISTA")}
+                      onClick={() => setTipoCliente('TURISTA')}
                       className={`rounded-2xl border-2 flex items-center justify-center space-x-2 font-black text-sm transition-all cursor-pointer ${
-                        tipoCliente === "TURISTA"
-                          ? "border-purple-600 bg-purple-50 text-purple-900 shadow-xs"
-                          : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                        tipoCliente === 'TURISTA'
+                          ? 'border-purple-600 bg-purple-50 text-purple-900 shadow-xs'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                       }`}
                     >
                       <Compass className="w-4 h-4 text-purple-600" />
@@ -1287,9 +1338,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center space-x-2">
                     <Tag className="w-5 h-5 text-orange-600" />
-                    <span className="text-sm font-black uppercase text-slate-700">
-                      Descuento
-                    </span>
+                    <span className="text-sm font-black uppercase text-slate-700">Descuento</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex items-center space-x-2">
@@ -1300,8 +1349,8 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         type="button"
                         onClick={() => {
                           setDiscountValue(0);
-                          setCustomDiscountInput("");
-                          setDiscountType("PORCENTAJE");
+                          setCustomDiscountInput('');
+                          setDiscountType('PORCENTAJE');
                         }}
                         className="text-xs font-bold text-slate-500 hover:text-rose-600 underline cursor-pointer"
                       >
@@ -1317,34 +1366,23 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     <div className="grid grid-cols-12 gap-2 items-center">
                       <button
                         type="button"
-                        disabled={
-                          discountType === "PORCENTAJE" && discountValue <= 0
-                        }
+                        disabled={discountType === 'PORCENTAJE' && discountValue <= 0}
                         onClick={() => {
-                          setDiscountType("PORCENTAJE");
-                          const nextVal = Math.max(
-                            0,
-                            (discountType === "PORCENTAJE"
-                              ? discountValue
-                              : 0) - 5,
-                          );
+                          setDiscountType('PORCENTAJE');
+                          const nextVal = Math.max(0, (discountType === 'PORCENTAJE' ? discountValue : 0) - 5);
                           setDiscountValue(nextVal);
                         }}
                         className="col-span-3 h-12 bg-white hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-white text-slate-800 border-2 border-slate-300 rounded-xl font-black text-sm sm:text-base flex items-center justify-center space-x-1 cursor-pointer transition-all shadow-xs active:scale-95 select-none"
                         title="Disminuir 5%"
                       >
-                        <span className="text-lg leading-none font-black">
-                          −
-                        </span>
+                        <span className="text-lg leading-none font-black">−</span>
                         <span>5%</span>
                       </button>
 
                       <div className="col-span-6 h-12 bg-white border-2 border-orange-500/50 rounded-xl flex flex-col items-center justify-center px-2 shadow-xs">
                         <div className="flex items-baseline space-x-1.5">
                           <span className="text-xl sm:text-2xl font-black text-slate-900">
-                            {discountType === "PORCENTAJE"
-                              ? `${discountValue}%`
-                              : formatCurrency(discountValue)}
+                            {discountType === 'PORCENTAJE' ? `${discountValue}%` : formatCurrency(discountValue)}
                           </span>
                           {discountAmount > 0 && (
                             <span className="text-xs font-black text-emerald-600">
@@ -1353,33 +1391,22 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                           )}
                         </div>
                         <span className="text-[10px] font-bold text-slate-400 -mt-0.5">
-                          {discountValue === 0
-                            ? "Sin descuento"
-                            : "Descuento aplicado"}
+                          {discountValue === 0 ? 'Sin descuento' : 'Descuento aplicado'}
                         </span>
                       </div>
 
                       <button
                         type="button"
-                        disabled={
-                          discountType === "PORCENTAJE" && discountValue >= 100
-                        }
+                        disabled={discountType === 'PORCENTAJE' && discountValue >= 100}
                         onClick={() => {
-                          setDiscountType("PORCENTAJE");
-                          const nextVal = Math.min(
-                            100,
-                            (discountType === "PORCENTAJE"
-                              ? discountValue
-                              : 0) + 5,
-                          );
+                          setDiscountType('PORCENTAJE');
+                          const nextVal = Math.min(100, (discountType === 'PORCENTAJE' ? discountValue : 0) + 5);
                           setDiscountValue(nextVal);
                         }}
                         className="col-span-3 h-12 bg-orange-600 hover:bg-orange-700 disabled:opacity-30 disabled:hover:bg-orange-600 text-white rounded-xl font-black text-sm sm:text-base flex items-center justify-center space-x-1 cursor-pointer transition-all shadow-md shadow-orange-600/20 active:scale-95 select-none"
                         title="Incrementar 5%"
                       >
-                        <span className="text-lg leading-none font-black">
-                          +
-                        </span>
+                        <span className="text-lg leading-none font-black">+</span>
                         <span>5%</span>
                       </button>
                     </div>
@@ -1387,24 +1414,22 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     {/* Accesos rápidos habituales de 5% */}
                     <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-thin">
                       {[0, 5, 10, 15, 20, 25, 30, 50].map((pct) => {
-                        const isSelected =
-                          discountType === "PORCENTAJE" &&
-                          discountValue === pct;
+                        const isSelected = discountType === 'PORCENTAJE' && discountValue === pct;
                         return (
                           <button
                             key={pct}
                             type="button"
                             onClick={() => {
-                              setDiscountType("PORCENTAJE");
+                              setDiscountType('PORCENTAJE');
                               setDiscountValue(pct);
                             }}
                             className={`px-3 py-1.5 rounded-xl text-xs font-black shrink-0 transition-all cursor-pointer border-2 ${
                               isSelected
-                                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                                : "bg-white hover:bg-slate-100 text-slate-700 border-slate-300"
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
                             }`}
                           >
-                            {pct === 0 ? "0%" : `${pct}%`}
+                            {pct === 0 ? '0%' : `${pct}%`}
                           </button>
                         );
                       })}
@@ -1415,10 +1440,10 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         type="button"
                         onClick={() => {
                           setShowCustomAmount(true);
-                          setDiscountType("MONTO");
+                          setDiscountType('MONTO');
                           setDiscountValue(0);
                         }}
-                        className="text-xs font-bold text-orange-950 hover:text-orange-950 bg-orange-200 hover:bg-orange-300 border border-orange-300 px-3 py-1.5 rounded-full cursor-pointer transition-colors"
+                        className="text-[11px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer"
                       >
                         ¿Ingresar monto fijo en pesos ($)?
                       </button>
@@ -1438,17 +1463,11 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                           max={subtotalOperacion}
                           step="50"
                           placeholder="Monto en pesos a descontar"
-                          value={
-                            discountType === "MONTO" && discountValue > 0
-                              ? discountValue
-                              : ""
-                          }
+                          value={discountType === 'MONTO' && discountValue > 0 ? discountValue : ''}
                           onChange={(e) => {
                             const num = parseFloat(e.target.value) || 0;
-                            setDiscountType("MONTO");
-                            setDiscountValue(
-                              Math.min(subtotalOperacion, Math.max(0, num)),
-                            );
+                            setDiscountType('MONTO');
+                            setDiscountValue(Math.min(subtotalOperacion, Math.max(0, num)));
                           }}
                           className="w-full h-11 pl-8 pr-3 text-sm font-black bg-white border-2 border-slate-300 rounded-xl focus:border-orange-500 focus:outline-none"
                         />
@@ -1457,7 +1476,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         type="button"
                         onClick={() => {
                           setShowCustomAmount(false);
-                          setDiscountType("PORCENTAJE");
+                          setDiscountType('PORCENTAJE');
                           setDiscountValue(0);
                         }}
                         className="h-11 px-3.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
@@ -1488,92 +1507,60 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     </p>
                     {discountAmount > 0 && (
                       <p className="text-xs font-semibold text-slate-500">
-                        Subtotal original:{" "}
-                        <span className="line-through">
-                          {formatCurrency(subtotalOperacion)}
-                        </span>
+                        Subtotal original: <span className="line-through">{formatCurrency(subtotalOperacion)}</span>
                       </p>
                     )}
                   </div>
                   <div className="sm:text-right text-xs sm:text-sm font-bold text-slate-600">
-                    <span className="block">
-                      {quantity} u. de {selectedProduct.nombre}
-                    </span>
+                    <span className="block">{quantity} u. de {selectedProduct.nombre}</span>
                     <span className="block text-slate-400 font-semibold mt-0.5">
-                      {metodoPago} • {tipoCliente} • Turno{" "}
-                      {config?.turnoActual === "MANANA" ? "Mañana" : "Tarde"}
+                      {metodoPago} • {tipoCliente} • Turno {config?.turnoActual === 'MANANA' ? 'Mañana' : 'Tarde'}
                     </span>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!cajaInfo?.abierta) {
-                      setOpenMontoInicial(0);
-                      setOpenTurno(config?.turnoActual || "MANANA");
-                      setShowOpenModal(true);
-                      return;
-                    }
-                    handleSubmitSale();
-                  }}
-                  disabled={
-                    cajaInfo?.abierta && (!hayStockSuficiente || loading)
-                  }
+                  onClick={handleSubmitSale}
+                  disabled={!hayStockSuficiente || loading}
                   className={`w-full h-16 sm:h-18 rounded-2xl text-xl sm:text-2xl font-black text-white shadow-xl transition-all flex items-center justify-center space-x-3 cursor-pointer ${
-                    !cajaInfo?.abierta
-                      ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30 active:scale-[0.99]"
-                      : !hayStockSuficiente || loading
-                        ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
-                        : "bg-orange-600 hover:bg-orange-700 active:scale-[0.99] shadow-orange-600/30"
+                    !hayStockSuficiente || loading
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                      : 'bg-orange-600 hover:bg-orange-700 active:scale-[0.99] shadow-orange-600/30'
                   }`}
                 >
-                  {!cajaInfo?.abierta ? (
-                    <>
-                      <Unlock className="w-7 h-7" />
-                      <span>ABRIR CAJA PARA PODER COBRAR</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCart className="w-7 h-7" />
-                      <span>
-                        {loading ? "Registrando..." : "CONFIRMAR VENTA [Enter]"}
-                      </span>
-                    </>
-                  )}
+                  <ShoppingCart className="w-7 h-7" />
+                  <span>{loading ? 'Registrando...' : 'CONFIRMAR VENTA [Enter]'}</span>
                 </button>
               </div>
             </div>
           )}
-        </div>
-      </div>
+
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ============================================================ */}
       {/* MODAL 1: ABRIR CAJA */}
       {/* ============================================================ */}
       {showOpenModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-orange-100 text-orange-700 rounded-xl">
                   <Unlock className="w-5 h-5" />
                 </div>
-                <h3 className="font-extrabold text-lg text-slate-900">
-                  Apertura de Caja Registradora
-                </h3>
+                <h3 className="font-extrabold text-lg text-slate-900">Apertura de Caja Registradora</h3>
               </div>
-              <button
-                onClick={() => setShowOpenModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
+              <button onClick={() => setShowOpenModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <p className="text-xs text-slate-500 font-medium">
-              Indica el fondo de cambio inicial en efectivo y el turno para
-              comenzar la jornada de cobro.
+              Indica el fondo de cambio inicial en efectivo, el turno y los 2 emprendimientos responsables de la caja.
             </p>
 
             <form onSubmit={handleOpenCajaSubmit} className="space-y-4">
@@ -1581,20 +1568,58 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                 <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
                   Monto Inicial en Efectivo (Fondo de Cambio) *
                 </label>
-                <div className="relative">
-                  <DollarSign className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={openMontoInicial}
-                    onChange={(e) =>
-                      setOpenMontoInicial(parseFloat(e.target.value) || 0)
-                    }
-                    className="w-full pl-10 pr-4 py-2.5 text-xl font-black bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none"
-                  />
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onMouseDown={() => startHold('dec')}
+                    onMouseUp={stopHold}
+                    onMouseLeave={stopHold}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      startHold('dec');
+                    }}
+                    onTouchEnd={stopHold}
+                    onClick={(e) => e.preventDefault()}
+                    className="w-12 h-12 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-black rounded-xl text-2xl border-2 border-slate-300 transition-all cursor-pointer flex items-center justify-center shrink-0 select-none"
+                    title="Mantén presionado para restar de a $100"
+                  >
+                    -
+                  </button>
+                  <div className="relative flex-1">
+                    <DollarSign className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      required
+                      value={openMontoInicial}
+                      onChange={(e) => setOpenMontoInicial(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-full pl-10 pr-4 py-2.5 text-xl font-black bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none text-center"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onMouseDown={() => startHold('inc')}
+                    onMouseUp={stopHold}
+                    onMouseLeave={stopHold}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      startHold('inc');
+                    }}
+                    onTouchEnd={stopHold}
+                    onClick={(e) => e.preventDefault()}
+                    className="w-12 h-12 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-black rounded-xl text-2xl border-2 border-slate-300 transition-all cursor-pointer flex items-center justify-center shrink-0 select-none"
+                    title="Mantén presionado para sumar de a $100"
+                  >
+                    +
+                  </button>
                 </div>
+                {openMontoInicial > 0 && (
+                  <p className="text-[11px] text-slate-500 font-medium mt-1.5 flex items-center justify-between">
+                    <span>Monto sugerido guardado:</span>
+                    <strong className="text-emerald-700 font-black">{formatCurrency(openMontoInicial)}</strong>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1603,14 +1628,86 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                 </label>
                 <select
                   value={openTurno}
-                  onChange={(e) =>
-                    setOpenTurno(e.target.value as "MANANA" | "TARDE")
-                  }
+                  onChange={(e) => setOpenTurno(e.target.value as 'MANANA' | 'TARDE')}
                   className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none"
                 >
                   <option value="MANANA">Turno Mañana</option>
                   <option value="TARDE">Turno Tarde</option>
                 </select>
+              </div>
+
+              {/* SELECCIÓN DE 2 EMPRENDIMIENTOS ENCARGADOS */}
+              <div className="space-y-3 p-3.5 bg-orange-50/70 rounded-2xl border-2 border-orange-200">
+                <div className="flex items-center space-x-2">
+                  <Users className="w-4 h-4 text-orange-600 shrink-0" />
+                  <label className="block text-xs font-black uppercase text-orange-950 tracking-wider">
+                    Encargados de Caja del Turno (Elegir 2) *
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-600 font-medium leading-tight">
+                  Selecciona los 2 emprendimientos que estarán a cargo de la atención y la recaudación en este turno.
+                </p>
+
+                {/* 1.er Encargado */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                    1.er Emprendimiento Encargado *
+                  </label>
+                  <select
+                    required
+                    value={openEncargado1Id}
+                    onChange={(e) => setOpenEncargado1Id(e.target.value)}
+                    className="w-full px-3 py-2 text-xs sm:text-sm font-bold bg-white border-2 border-slate-300 rounded-xl focus:border-orange-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">-- Seleccionar 1.er Encargado --</option>
+                    {ventures
+                      .filter((v) => v.activo !== false)
+                      .map((v) => (
+                        <option
+                          key={v.id}
+                          value={v.id}
+                          disabled={v.id === openEncargado2Id}
+                        >
+                          [{v.codigo}] {v.nombre} — {v.responsable}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* 2.º Encargado */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                    2.º Emprendimiento Encargado *
+                  </label>
+                  <select
+                    required
+                    value={openEncargado2Id}
+                    onChange={(e) => setOpenEncargado2Id(e.target.value)}
+                    className="w-full px-3 py-2 text-xs sm:text-sm font-bold bg-white border-2 border-slate-300 rounded-xl focus:border-orange-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">-- Seleccionar 2.º Encargado --</option>
+                    {ventures
+                      .filter((v) => v.activo !== false)
+                      .map((v) => (
+                        <option
+                          key={v.id}
+                          value={v.id}
+                          disabled={v.id === openEncargado1Id}
+                        >
+                          [{v.codigo}] {v.nombre} — {v.responsable}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {openEncargado1Id && openEncargado2Id && openEncargado1Id !== openEncargado2Id && (
+                  <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 font-bold flex items-center space-x-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>
+                      Encargados seleccionados: {ventures.find((v) => v.id === openEncargado1Id)?.codigo} y {ventures.find((v) => v.id === openEncargado2Id)?.codigo}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1636,10 +1733,10 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={openingCaja}
-                  className="px-5 py-2.5 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 rounded-xl shadow-md disabled:opacity-50 cursor-pointer"
+                  disabled={openingCaja || !openEncargado1Id || !openEncargado2Id || openEncargado1Id === openEncargado2Id}
+                  className="px-5 py-2.5 text-xs font-black text-white bg-orange-600 hover:bg-orange-700 rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all"
                 >
-                  {openingCaja ? "Abriendo..." : "Confirmar Apertura de Caja"}
+                  {openingCaja ? 'Abriendo...' : 'Confirmar Apertura de Caja'}
                 </button>
               </div>
             </form>
@@ -1658,52 +1755,45 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                 <div className="p-2 bg-slate-900 text-white rounded-xl">
                   <Lock className="w-5 h-5" />
                 </div>
-                <h3 className="font-extrabold text-lg text-slate-900">
-                  Arqueo y Cierre de Caja
-                </h3>
+                <h3 className="font-extrabold text-lg text-slate-900">Arqueo y Cierre de Caja</h3>
               </div>
-              <button
-                onClick={() => setShowCloseModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
+              <button onClick={() => setShowCloseModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Encargados de este turno */}
+            {cajaInfo?.sesion?.encargadosTexto && (
+              <div className="bg-orange-50 p-3 rounded-2xl border border-orange-200 flex items-center space-x-2.5 text-xs text-orange-950">
+                <Users className="w-4 h-4 text-orange-600 shrink-0" />
+                <div>
+                  <span className="font-bold text-slate-500 block text-[10px] uppercase">Encargados del turno:</span>
+                  <strong className="font-black text-slate-900">{cajaInfo.sesion.encargadosTexto}</strong>
+                </div>
+              </div>
+            )}
 
             {/* Resumen de Valores de la Sesión */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Fondo Inicial en Caja:</span>
-                <span className="font-bold">
-                  {formatCurrency(cajaInfo?.sesion?.montoInicial ?? 0)}
-                </span>
+                <span className="font-bold">{formatCurrency(cajaInfo?.sesion?.montoInicial ?? 0)}</span>
               </div>
               <div className="flex justify-between text-emerald-700">
                 <span>(+) Ventas en Efectivo del Turno:</span>
-                <span className="font-bold">
-                  +
-                  {formatCurrency(cajaInfo?.totalesEnVivo?.ventasEfectivo ?? 0)}
-                </span>
+                <span className="font-bold">+{formatCurrency(cajaInfo?.totalesEnVivo?.ventasEfectivo ?? 0)}</span>
               </div>
               <div className="flex justify-between text-blue-700">
                 <span>(Informativo) Ventas por Transferencia:</span>
-                <span className="font-bold">
-                  {formatCurrency(
-                    cajaInfo?.totalesEnVivo?.ventasTransferencia ?? 0,
-                  )}
-                </span>
+                <span className="font-bold">{formatCurrency(cajaInfo?.totalesEnVivo?.ventasTransferencia ?? 0)}</span>
               </div>
               <div className="flex justify-between text-amber-700">
                 <span>(-) Retiros en Efectivo entregados:</span>
-                <span className="font-bold">
-                  -{formatCurrency(cajaInfo?.totalesEnVivo?.totalRetiros ?? 0)}
-                </span>
+                <span className="font-bold">-{formatCurrency(cajaInfo?.totalesEnVivo?.totalRetiros ?? 0)}</span>
               </div>
               <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-900">
                 <span>Efectivo Esperado en Cajón:</span>
-                <span className="text-emerald-700">
-                  {formatCurrency(esperadoCaja)}
-                </span>
+                <span className="text-emerald-700">{formatCurrency(esperadoCaja)}</span>
               </div>
             </div>
 
@@ -1720,9 +1810,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                     step="0.01"
                     required
                     value={closeRealContado}
-                    onChange={(e) =>
-                      setCloseRealContado(parseFloat(e.target.value) || 0)
-                    }
+                    onChange={(e) => setCloseRealContado(parseFloat(e.target.value) || 0)}
                     className="w-full pl-10 pr-4 py-2.5 text-xl font-black bg-white border-2 border-slate-300 rounded-xl focus:border-orange-500 focus:outline-none"
                   />
                 </div>
@@ -1732,19 +1820,19 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
               <div
                 className={`p-3 rounded-xl border flex items-center justify-between text-xs font-black ${
                   diferenciaArqueo === 0
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : diferenciaArqueo > 0
-                      ? "bg-blue-50 text-blue-800 border-blue-200"
-                      : "bg-rose-50 text-rose-800 border-rose-200"
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
                 }`}
               >
                 <span>Diferencia de Caja:</span>
                 <span className="text-sm">
                   {diferenciaArqueo === 0
-                    ? "Exacto ($0)"
+                    ? 'Exacto ($0)'
                     : diferenciaArqueo > 0
-                      ? `Sobrante de +${formatCurrency(diferenciaArqueo)}`
-                      : `Faltante de ${formatCurrency(diferenciaArqueo)}`}
+                    ? `Sobrante de +${formatCurrency(diferenciaArqueo)}`
+                    : `Faltante de ${formatCurrency(diferenciaArqueo)}`}
                 </span>
               </div>
 
@@ -1774,7 +1862,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   disabled={closingCaja}
                   className="px-5 py-2.5 text-xs font-black text-white bg-slate-900 hover:bg-black rounded-xl shadow-md disabled:opacity-50 cursor-pointer"
                 >
-                  {closingCaja ? "Cerrando..." : "Confirmar Cierre de Caja"}
+                  {closingCaja ? 'Cerrando...' : 'Confirmar Cierre de Caja'}
                 </button>
               </div>
             </form>
@@ -1792,42 +1880,38 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
               <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2">
                 <Check className="w-6 h-6" />
               </div>
-              <h3 className="font-black text-xl text-slate-900">
-                Caja Cerrada con Éxito
-              </h3>
-              <p className="text-xs text-slate-500">
-                Comprobante oficial de arqueo del turno
-              </p>
+              <h3 className="font-black text-xl text-slate-900">Caja Cerrada con Éxito</h3>
+              <p className="text-xs text-slate-500">Comprobante oficial de arqueo del turno</p>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-2 font-medium">
               <div className="flex justify-between">
                 <span className="text-slate-500">Fecha Cierre:</span>
-                <span className="font-bold">
-                  {formatDateTime(closedSummary.fechaCierre || new Date())}
-                </span>
+                <span className="font-bold">{formatDateTime(closedSummary.fechaCierre || new Date())}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Turno:</span>
                 <span className="font-bold">{closedSummary.turno}</span>
               </div>
+              {closedSummary.encargadosTexto && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500">Encargados:</span>
+                  <span className="font-bold text-slate-900 text-right truncate max-w-[220px]">
+                    {closedSummary.encargadosTexto}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Fondo Inicial:</span>
-                <span className="font-bold">
-                  {formatCurrency(closedSummary.montoInicial)}
-                </span>
+                <span className="font-bold">{formatCurrency(closedSummary.montoInicial)}</span>
               </div>
               <div className="flex justify-between text-emerald-700 font-bold">
                 <span>Ventas Efectivo:</span>
-                <span>
-                  {formatCurrency(closedSummary.montoVentasEfectivo ?? 0)}
-                </span>
+                <span>{formatCurrency(closedSummary.montoVentasEfectivo ?? 0)}</span>
               </div>
               <div className="flex justify-between text-blue-700 font-bold">
                 <span>Ventas Transferencia:</span>
-                <span>
-                  {formatCurrency(closedSummary.montoVentasTransferencia ?? 0)}
-                </span>
+                <span>{formatCurrency(closedSummary.montoVentasTransferencia ?? 0)}</span>
               </div>
               <div className="flex justify-between text-amber-700 font-bold">
                 <span>Retiros Efectuados:</span>
@@ -1835,9 +1919,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
               </div>
               <div className="pt-2 border-t border-slate-200 flex justify-between font-black text-sm">
                 <span>Efectivo Real Contado:</span>
-                <span className="text-slate-900">
-                  {formatCurrency(closedSummary.montoRealContado ?? 0)}
-                </span>
+                <span className="text-slate-900">{formatCurrency(closedSummary.montoRealContado ?? 0)}</span>
               </div>
               <div className="flex justify-between font-bold">
                 <span>Diferencia Arqueo:</span>
@@ -1868,13 +1950,16 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   <BarChart3 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-lg">
-                    Recaudación y Estadísticas del Día
-                  </h3>
+                  <h3 className="font-black text-lg">Recaudación y Estadísticas del Día</h3>
                   <p className="text-xs text-slate-400">
-                    Control de ventas acumuladas hoy (
-                    {dailyStats?.fecha || "Hoy"})
+                    Control de ventas acumuladas hoy ({dailyStats?.fecha || 'Hoy'})
                   </p>
+                  {cajaInfo?.sesion?.encargadosTexto && (
+                    <p className="text-xs text-orange-400 font-bold mt-0.5 flex items-center space-x-1.5">
+                      <Users className="w-3.5 h-3.5 shrink-0" />
+                      <span>Encargados actuales: {cajaInfo.sesion.encargadosTexto}</span>
+                    </p>
+                  )}
                 </div>
               </div>
               <button
@@ -1907,8 +1992,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         {formatCurrency(dailyStats.totalVentas)}
                       </p>
                       <span className="text-[10px] text-orange-600 font-bold block mt-0.5">
-                        {dailyStats.cantidadVentas} operaciones (
-                        {dailyStats.unidadesVendidas} unidades)
+                        {dailyStats.cantidadVentas} operaciones ({dailyStats.unidadesVendidas} unidades)
                       </span>
                     </div>
 
@@ -1941,20 +2025,10 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         Ventas por Turno
                       </span>
                       <p className="text-sm font-bold text-slate-800 mt-1">
-                        Mañana:{" "}
-                        <span className="font-black">
-                          {formatCurrency(
-                            dailyStats.ventasPorTurno.manana.total,
-                          )}
-                        </span>
+                        Mañana: <span className="font-black">{formatCurrency(dailyStats.ventasPorTurno.manana.total)}</span>
                       </p>
                       <p className="text-sm font-bold text-slate-800 mt-0.5">
-                        Tarde:{" "}
-                        <span className="font-black">
-                          {formatCurrency(
-                            dailyStats.ventasPorTurno.tarde.total,
-                          )}
-                        </span>
+                        Tarde: <span className="font-black">{formatCurrency(dailyStats.ventasPorTurno.tarde.total)}</span>
                       </p>
                     </div>
                   </div>
@@ -1971,50 +2045,28 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                             <th className="py-2.5 px-3">Código</th>
                             <th className="py-2.5 px-3">Emprendimiento</th>
                             <th className="py-2.5 px-3">Responsable</th>
-                            <th className="py-2.5 px-3 text-center">
-                              Operaciones
-                            </th>
-                            <th className="py-2.5 px-3 text-center">
-                              Unidades
-                            </th>
+                            <th className="py-2.5 px-3 text-center">Operaciones</th>
+                            <th className="py-2.5 px-3 text-center">Unidades</th>
                             <th className="py-2.5 px-3 text-right">Efectivo</th>
                             <th className="py-2.5 px-3 text-right">Transf.</th>
-                            <th className="py-2.5 px-3 text-right">
-                              Total Acumulado
-                            </th>
+                            <th className="py-2.5 px-3 text-right">Total Acumulado</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-medium">
                           {dailyStats.ventasPorEmprendimiento.length === 0 ? (
                             <tr>
-                              <td
-                                colSpan={8}
-                                className="py-6 text-center text-slate-400"
-                              >
+                              <td colSpan={8} className="py-6 text-center text-slate-400">
                                 Sin ventas por emprendimiento hoy.
                               </td>
                             </tr>
                           ) : (
                             dailyStats.ventasPorEmprendimiento.map((emp) => (
-                              <tr
-                                key={emp.emprendimientoId}
-                                className="hover:bg-slate-50"
-                              >
-                                <td className="py-2 px-3 font-mono font-bold text-slate-800">
-                                  {emp.codigo}
-                                </td>
-                                <td className="py-2 px-3 font-bold text-slate-900">
-                                  {emp.nombre}
-                                </td>
-                                <td className="py-2 px-3 text-slate-500">
-                                  {emp.responsable}
-                                </td>
-                                <td className="py-2 px-3 text-center font-bold">
-                                  {emp.cantidadVentas}
-                                </td>
-                                <td className="py-2 px-3 text-center font-bold">
-                                  {emp.unidades} u.
-                                </td>
+                              <tr key={emp.emprendimientoId} className="hover:bg-slate-50">
+                                <td className="py-2 px-3 font-mono font-bold text-slate-800">{emp.codigo}</td>
+                                <td className="py-2 px-3 font-bold text-slate-900">{emp.nombre}</td>
+                                <td className="py-2 px-3 text-slate-500">{emp.responsable}</td>
+                                <td className="py-2 px-3 text-center font-bold">{emp.cantidadVentas}</td>
+                                <td className="py-2 px-3 text-center font-bold">{emp.unidades} u.</td>
                                 <td className="py-2 px-3 text-right font-semibold text-emerald-700">
                                   {formatCurrency(emp.efectivo)}
                                 </td>
@@ -2035,8 +2087,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                   {/* TABLA 2: LISTADO DE OPERACIONES DEL DÍA */}
                   <div className="space-y-2">
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                      Listado Detallado de Tickets de Hoy (
-                      {dailyStats.listadoVentas.length})
+                      Listado Detallado de Tickets de Hoy ({dailyStats.listadoVentas.length})
                     </h4>
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-60 overflow-y-auto">
                       <table className="w-full text-left text-xs">
@@ -2054,9 +2105,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                         <tbody className="divide-y divide-slate-100 font-medium">
                           {dailyStats.listadoVentas.map((v) => (
                             <tr key={v.id} className="hover:bg-slate-50">
-                              <td className="py-2 px-3 font-mono text-slate-500">
-                                {v.hora}
-                              </td>
+                              <td className="py-2 px-3 font-mono text-slate-500">{v.hora}</td>
                               <td className="py-2 px-3 font-bold text-slate-800">
                                 {v.emprendimiento?.nombre || v.emprendimientoId}
                               </td>
@@ -2066,15 +2115,13 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                                 </span>
                                 {v.producto?.nombre}
                               </td>
-                              <td className="py-2 px-3 text-center font-bold">
-                                {v.cantidad} u.
-                              </td>
+                              <td className="py-2 px-3 text-center font-bold">{v.cantidad} u.</td>
                               <td className="py-2 px-3">
                                 <span
                                   className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                                    v.metodoPago === "EFECTIVO"
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : "bg-blue-100 text-blue-800"
+                                    v.metodoPago === 'EFECTIVO'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-blue-100 text-blue-800'
                                   }`}
                                 >
                                   {v.metodoPago}
@@ -2091,9 +2138,7 @@ export const SalesPOSPage: React.FC<SalesPOSPageProps> = ({ config }) => {
                               <td className="py-2 px-3">
                                 <span
                                   className={`text-[10px] font-bold ${
-                                    v.estado === "ACTIVO"
-                                      ? "text-emerald-600"
-                                      : "text-red-500"
+                                    v.estado === 'ACTIVO' ? 'text-emerald-600' : 'text-red-500'
                                   }`}
                                 >
                                   {v.estado}

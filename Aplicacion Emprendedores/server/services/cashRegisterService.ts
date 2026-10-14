@@ -1,4 +1,5 @@
 import { prisma } from '../db';
+import { v4 as uuidv4 } from 'uuid';
 import {
   SesionCaja,
   SesionCajaActualInfo,
@@ -19,9 +20,21 @@ export const cashRegisterService = {
     });
 
     if (!sesion) {
+      const ultimaCerrada = await prisma.sesionCaja.findFirst({
+        where: { estado: 'CERRADA' },
+        orderBy: { fechaCierre: 'desc' },
+      });
+      const ultimoFondoCierre =
+        ultimaCerrada?.montoRealContado != null
+          ? Number(ultimaCerrada.montoRealContado)
+          : ultimaCerrada?.montoEsperadoEfectivo != null
+          ? Number(ultimaCerrada.montoEsperadoEfectivo)
+          : 0;
+
       return {
         abierta: false,
         sesion: null,
+        ultimoFondoCierre,
       };
     }
 
@@ -65,9 +78,22 @@ export const cashRegisterService = {
     const montoEsperadoEfectivo =
       Math.round((sesion.montoInicial + ventasEfectivo - totalRetiros) * 100) / 100;
 
+    let encargado1 = null;
+    let encargado2 = null;
+    if (sesion.encargado1Id || sesion.encargado2Id) {
+      [encargado1, encargado2] = await Promise.all([
+        sesion.encargado1Id ? prisma.emprendimiento.findUnique({ where: { id: sesion.encargado1Id } }) : null,
+        sesion.encargado2Id ? prisma.emprendimiento.findUnique({ where: { id: sesion.encargado2Id } }) : null,
+      ]);
+    }
+
     return {
       abierta: true,
-      sesion: sesion as any,
+      sesion: {
+        ...sesion,
+        encargado1,
+        encargado2,
+      } as any,
       totalesEnVivo: {
         ventasEfectivo,
         ventasTransferencia,
@@ -99,11 +125,39 @@ export const cashRegisterService = {
       throw new Error('El monto inicial en caja debe ser un número mayor o igual a 0.');
     }
 
+    if (!data.encargado1Id || !data.encargado2Id) {
+      throw new Error('Debes seleccionar 2 emprendimientos encargados de la caja para iniciar la jornada.');
+    }
+
+    if (data.encargado1Id === data.encargado2Id) {
+      throw new Error('Los 2 emprendimientos encargados deben ser distintos.');
+    }
+
+    const [emp1, emp2] = await Promise.all([
+      prisma.emprendimiento.findUnique({ where: { id: data.encargado1Id } }),
+      prisma.emprendimiento.findUnique({ where: { id: data.encargado2Id } }),
+    ]);
+
+    if (!emp1 || !emp2) {
+      throw new Error('Uno o ambos emprendimientos seleccionados no existen en el sistema.');
+    }
+
+    const encargadosTexto = `[${emp1.codigo}] ${emp1.nombre} (${emp1.responsable}) y [${emp2.codigo}] ${emp2.nombre} (${emp2.responsable})`;
+
+    const config = await prisma.configuracion.findFirst();
+    const localCodigo = config?.localCodigo || 'LOCAL_01';
+    const identificadorUnico = `${localCodigo}-CAJA-${Date.now()}-${uuidv4().substring(0, 8)}`;
+
     const sesion = await prisma.sesionCaja.create({
       data: {
+        identificadorUnico,
+        localOrigen: localCodigo,
         montoInicial,
         turno: data.turno || 'MANANA',
-        usuarioApertura: data.usuario || 'cajero',
+        encargado1Id: emp1.id,
+        encargado2Id: emp2.id,
+        encargadosTexto,
+        usuarioApertura: data.usuario || `${emp1.codigo} & ${emp2.codigo}`,
         observaciones: data.observaciones?.trim() || null,
         estado: 'ABIERTA',
       },
@@ -114,16 +168,23 @@ export const cashRegisterService = {
         entidad: 'VENTA',
         entidadId: sesion.id,
         accion: 'CREACION',
-        usuario: data.usuario || 'cajero',
+        usuario: data.usuario || `${emp1.codigo} & ${emp2.codigo}`,
         detallesJson: JSON.stringify({
           tipo: 'APERTURA_CAJA',
           montoInicial,
           turno: sesion.turno,
+          encargado1: { id: emp1.id, codigo: emp1.codigo, nombre: emp1.nombre, responsable: emp1.responsable },
+          encargado2: { id: emp2.id, codigo: emp2.codigo, nombre: emp2.nombre, responsable: emp2.responsable },
+          encargadosTexto,
         }),
       },
     });
 
-    return sesion as any;
+    return {
+      ...sesion,
+      encargado1: emp1,
+      encargado2: emp2,
+    } as any;
   },
 
   /**

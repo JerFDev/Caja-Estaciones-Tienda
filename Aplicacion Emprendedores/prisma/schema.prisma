@@ -19,17 +19,23 @@ model Configuracion {
 
 model Emprendimiento {
   id                  String       @id @default(uuid())
-  codigo              String       @unique // Ej: "AKM", "TDE" (3-4 caracteres)
+  codigo              String       @unique // Ej: "AKM", "TDE", "EMP-025" (Código oficial municipal)
   nombre              String       // Nombre comercial
+  nombreFantasia      String?      // Nombre de fantasía opcional
   responsable         String       // Nombre y apellido
+  documento           String?      // DNI u otro documento
+  cuit                String?      // CUIT / CUIL
   telefono            String?
   direccion           String?
   alias               String?
   cvu                 String?
+  cbu                 String?
   mail                String?
   rubro               String?
+  descripcion         String?      @db.Text
   porcentajeRetencion Float        @default(0.0)
   activo              Boolean      @default(true)
+  estado              String       @default("ACTIVO") // ACTIVO | INACTIVO | SUSPENDIDO | FINALIZADO
   fechaCreacion       DateTime     @default(now())
   fechaActualizacion  DateTime     @updatedAt
 
@@ -37,8 +43,20 @@ model Emprendimiento {
   ventas              Venta[]
   retiros             Retiro[]
 
+  // Relaciones Municipales
+  postulaciones       Postulacion[]
+  colectivos          EmprendimientoColectivo[]
+  participaciones     EdicionEmprendimiento[]
+  fiscalizaciones     Fiscalizacion[]
+  capacitaciones      EmprendimientoCapacitacion[]
+  reuniones           ReunionMunicipal[]
+  presenciaDigital    PresenciaDigital[]
+  serviciosRecibidos  EmprendimientoServicio[]
+  seguimientos        SeguimientoMunicipal[]
+
   @@index([codigo])
   @@index([activo])
+  @@index([estado])
 }
 
 model Producto {
@@ -56,6 +74,7 @@ model Producto {
   emprendimiento     Emprendimiento    @relation(fields: [emprendimientoId], references: [id])
   movimientosStock   MovimientoStock[]
   ventas             Venta[]
+  fiscalizaciones    Fiscalizacion[]
 
   @@index([codigo])
   @@index([emprendimientoId])
@@ -133,21 +152,298 @@ model Retiro {
 }
 
 model AuditoriaLog {
-  id           String   @id @default(uuid())
-  entidad      String   // VENTA | RETIRO | STOCK | PRODUCTO | EMPRENDIMIENTO
-  entidadId    String
-  accion       String   // CREACION | MODIFICACION | ANULACION | IMPORTACION
-  usuario      String   @default("sistema")
-  detallesJson String?  @db.Text
-  fecha        DateTime @default(now())
+  id              String   @id @default(uuid())
+  entidad         String   // VENTA | RETIRO | STOCK | PRODUCTO | EMPRENDIMIENTO | CONVOCATORIA | POSTULACION | COLECTIVO | EDICION | FISCALIZACION | CAPACITACION | SEGUIMIENTO
+  entidadId       String
+  accion          String   // CREACION | MODIFICACION | ANULACION | IMPORTACION | APROBACION | RECHAZO | ASIGNACION | BAJA
+  usuario         String   @default("sistema")
+  datosAnteriores String?  @db.Text
+  datosNuevos     String?  @db.Text
+  detallesJson    String?  @db.Text
+  fecha           DateTime @default(now())
 
   @@index([entidad, entidadId])
   @@index([fecha])
 }
 
+model Convocatoria {
+  id                 String        @id @default(uuid())
+  nombre             String
+  descripcion        String?       @db.Text
+  fechaInicio        DateTime
+  fechaFin           DateTime?
+  estado             String        @default("ABIERTA") // BORRADOR | ABIERTA | CERRADA | FINALIZADA | CANCELADA
+  requisitos         String?       @db.Text
+  observaciones      String?       @db.Text
+  fechaCreacion      DateTime      @default(now())
+  fechaActualizacion DateTime      @updatedAt
+
+  postulaciones      Postulacion[]
+
+  @@index([estado])
+  @@index([fechaInicio])
+}
+
+model Postulacion {
+  id                 String       @id @default(uuid())
+  convocatoriaId     String
+  emprendimientoId   String
+  fecha              DateTime     @default(now())
+  estado             String       @default("PENDIENTE") // PENDIENTE | EN_EVALUACION | APROBADA | RECHAZADA | DESISTIDA
+  observaciones      String?      @db.Text
+  evaluacion         String?      @db.Text
+  usuarioResponsable String?
+  fechaResolucion    DateTime?
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+
+  convocatoria       Convocatoria   @relation(fields: [convocatoriaId], references: [id])
+  emprendimiento     Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@unique([convocatoriaId, emprendimientoId])
+  @@index([estado])
+  @@index([emprendimientoId])
+}
+
+model Colectivo {
+  id                 String       @id @default(uuid())
+  nombre             String       @unique
+  descripcion        String?      @db.Text
+  orientacion        String?
+  imagen             String?
+  fechaInicio        DateTime?
+  fechaFin           DateTime?
+  estado             String       @default("ACTIVO") // ACTIVO | INACTIVO
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+
+  emprendimientos    EmprendimientoColectivo[]
+  participaciones    EdicionEmprendimiento[]
+
+  @@index([estado])
+}
+
+model EmprendimientoColectivo {
+  id               String         @id @default(uuid())
+  emprendimientoId String
+  colectivoId      String
+  fechaIngreso     DateTime       @default(now())
+  fechaSalida      DateTime?
+  estado           String         @default("ACTIVO") // ACTIVO | INACTIVO | FINALIZADO
+  observaciones    String?        @db.Text
+
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+  colectivo        Colectivo      @relation(fields: [colectivoId], references: [id])
+
+  @@index([emprendimientoId])
+  @@index([colectivoId])
+  @@index([estado])
+}
+
+model Local {
+  id                 String       @id @default(uuid())
+  codigo             String       @unique // Ej: "STAND-A", "LOCAL-01"
+  nombre             String
+  direccion          String?
+  descripcion        String?      @db.Text
+  capacidad          Int?         @default(1)
+  activo             Boolean      @default(true)
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+
+  ediciones          EdicionLocal[]
+  participaciones    EdicionEmprendimiento[]
+
+  @@index([codigo])
+  @@index([activo])
+}
+
+model Edicion {
+  id                 String       @id @default(uuid())
+  nombre             String
+  descripcion        String?      @db.Text
+  fechaInicio        DateTime
+  fechaFin           DateTime?
+  estado             String       @default("PLANIFICADA") // PLANIFICADA | ABIERTA | EN_CURSO | FINALIZADA | CANCELADA
+  observaciones      String?      @db.Text
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+
+  locales            EdicionLocal[]
+  participaciones    EdicionEmprendimiento[]
+
+  @@index([estado])
+  @@index([fechaInicio])
+}
+
+model EdicionLocal {
+  id        String  @id @default(uuid())
+  edicionId String
+  localId   String
+  estado    String  @default("ACTIVO")
+
+  edicion   Edicion @relation(fields: [edicionId], references: [id])
+  local     Local   @relation(fields: [localId], references: [id])
+
+  @@unique([edicionId, localId])
+}
+
+model EdicionEmprendimiento {
+  id               String         @id @default(uuid())
+  edicionId        String
+  emprendimientoId String
+  localId          String?
+  colectivoId      String?
+  fechaInicio      DateTime?
+  fechaFin         DateTime?
+  estado           String         @default("CONFIRMADA") // CONFIRMADA | EN_CURSO | FINALIZADA | CANCELADA
+  observaciones    String?        @db.Text
+  fechaCreacion    DateTime       @default(now())
+
+  edicion          Edicion        @relation(fields: [edicionId], references: [id])
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+  local            Local?         @relation(fields: [localId], references: [id])
+  colectivo        Colectivo?     @relation(fields: [colectivoId], references: [id])
+
+  @@index([edicionId])
+  @@index([emprendimientoId])
+  @@index([localId])
+  @@index([colectivoId])
+}
+
+model Fiscalizacion {
+  id               String         @id @default(uuid())
+  emprendimientoId String
+  productoId       String?
+  fecha            DateTime       @default(now())
+  usuario          String         @default("inspector")
+  resultado        String         @default("APROBADA") // PENDIENTE | APROBADA | OBSERVADA | RECHAZADA | REQUIERE_CORRECCION
+  observaciones    String?        @db.Text
+  motivo           String?
+  fechaCreacion    DateTime       @default(now())
+
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+  producto         Producto?      @relation(fields: [productoId], references: [id])
+
+  @@index([emprendimientoId])
+  @@index([resultado])
+  @@index([fecha])
+}
+
+model Capacitacion {
+  id                 String       @id @default(uuid())
+  nombre             String
+  descripcion        String?      @db.Text
+  fecha              DateTime
+  duracion           String?
+  lugar              String?
+  responsable        String?
+  estado             String       @default("PLANIFICADA") // PLANIFICADA | EN_CURSO | REALIZADA | CANCELADA
+  observaciones      String?      @db.Text
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+
+  participantes      EmprendimientoCapacitacion[]
+
+  @@index([estado])
+  @@index([fecha])
+}
+
+model EmprendimientoCapacitacion {
+  id               String         @id @default(uuid())
+  capacitacionId   String
+  emprendimientoId String
+  asistencia       Boolean        @default(true)
+  estado           String         @default("COMPLETADA") // INSCRIPTO | COMPLETADA | ABANDONO
+  observaciones    String?        @db.Text
+
+  capacitacion     Capacitacion   @relation(fields: [capacitacionId], references: [id])
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@unique([capacitacionId, emprendimientoId])
+}
+
+model ReunionMunicipal {
+  id               String         @id @default(uuid())
+  emprendimientoId String
+  fecha            DateTime       @default(now())
+  responsable      String
+  tema             String
+  acuerdos         String?        @db.Text
+  observaciones    String?        @db.Text
+  estado           String         @default("REALIZADA") // PENDIENTE | REALIZADA | CANCELADA
+  fechaCreacion    DateTime       @default(now())
+
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@index([emprendimientoId])
+  @@index([fecha])
+}
+
+model PresenciaDigital {
+  id               String         @id @default(uuid())
+  emprendimientoId String
+  canal            String         // INSTAGRAM | FACEBOOK | TIKTOK | WEB | GOOGLE_MAPS | WHATSAPP_BUSINESS | OTRO
+  url              String
+  estado           String         @default("ACTIVO") // ACTIVO | INACTIVO | EN_REVISION
+  fechaRevision    DateTime?
+  observaciones    String?        @db.Text
+  fechaCreacion    DateTime       @default(now())
+
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@index([emprendimientoId])
+}
+
+model ServicioMunicipal {
+  id              String                   @id @default(uuid())
+  nombre          String                   // Asesoramiento, Formalización, Asistencia Técnica, etc.
+  descripcion     String?                  @db.Text
+  activo          Boolean                  @default(true)
+
+  participaciones EmprendimientoServicio[]
+}
+
+model EmprendimientoServicio {
+  id                  String            @id @default(uuid())
+  servicioMunicipalId String
+  emprendimientoId    String
+  fecha               DateTime          @default(now())
+  estado              String            @default("OTORGADO") // SOLICITADO | EN_TRAMITE | OTORGADO | FINALIZADO | RECHAZADO
+  responsable         String?
+  observaciones       String?           @db.Text
+
+  servicio            ServicioMunicipal @relation(fields: [servicioMunicipalId], references: [id])
+  emprendimiento      Emprendimiento    @relation(fields: [emprendimientoId], references: [id])
+
+  @@index([emprendimientoId])
+  @@index([servicioMunicipalId])
+}
+
+model SeguimientoMunicipal {
+  id               String         @id @default(uuid())
+  emprendimientoId String
+  fecha            DateTime       @default(now())
+  tipo             String         @default("SEGUIMIENTO") // CONTACTO | LLAMADA | MENSAJE | REUNION | VISITA | SEGUIMIENTO | OTRO
+  responsable      String
+  motivo           String
+  observacion      String         @db.Text
+  proximoContacto  DateTime?
+  estado           String         @default("COMPLETADO") // PENDIENTE | EN_CURSO | COMPLETADO
+  fechaCreacion    DateTime       @default(now())
+
+  emprendimiento   Emprendimiento @relation(fields: [emprendimientoId], references: [id])
+
+  @@index([emprendimientoId])
+  @@index([fecha])
+  @@index([proximoContacto])
+}
+
 model HistorialImportacion {
   id              String   @id @default(uuid())
   nombreArchivo   String
+  archivoHash     String?  @db.VarChar(64)
+  sourceId        String?  @default("LOCAL_EXTERNO")
   fecha           DateTime @default(now())
   totalFilas      Int
   filasNuevas     Int
@@ -155,14 +451,22 @@ model HistorialImportacion {
   filasErrores    Int
   usuario         String?  @default("administrador")
   detallesJson    String?  @db.Text
+
+  @@index([archivoHash])
+  @@index([fecha])
 }
 
 model SesionCaja {
   id                       String    @id @default(uuid())
+  identificadorUnico       String?   @unique
+  localOrigen              String    @default("LOCAL_01")
   montoInicial             Float     @default(0.0)
   fechaApertura            DateTime  @default(now())
   fechaCierre              DateTime?
   turno                    String    @default("MANANA") // MANANA | TARDE
+  encargado1Id             String?
+  encargado2Id             String?
+  encargadosTexto          String?   @db.Text
   usuarioApertura          String?   @default("cajero")
   usuarioCierre            String?
   estado                   String    @default("ABIERTA") // ABIERTA | CERRADA
@@ -175,6 +479,9 @@ model SesionCaja {
   observaciones            String?   @db.Text
   fechaCreacion            DateTime  @default(now())
 
+  @@index([identificadorUnico])
   @@index([estado])
   @@index([fechaApertura])
+  @@index([encargado1Id])
+  @@index([encargado2Id])
 }
