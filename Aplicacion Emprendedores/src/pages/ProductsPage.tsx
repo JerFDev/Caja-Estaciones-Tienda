@@ -30,9 +30,9 @@ export const ProductsPage: React.FC = () => {
     emprendimientoId: '',
     nombre: '',
     descripcion: '',
-    precio: 0,
-    stockMinimoAlerta: 2,
-    stockInicial: 0,
+    precio: '' as string | number,
+    stockMinimoAlerta: 2 as string | number,
+    stockInicial: '' as string | number,
   });
   const [modalError, setModalError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
@@ -77,9 +77,9 @@ export const ProductsPage: React.FC = () => {
       emprendimientoId: '',
       nombre: '',
       descripcion: '',
-      precio: 0,
+      precio: '',
       stockMinimoAlerta: 2,
-      stockInicial: 0,
+      stockInicial: '',
     });
     setModalError(null);
     setShowModal(true);
@@ -94,7 +94,7 @@ export const ProductsPage: React.FC = () => {
       descripcion: p.descripcion || '',
       precio: p.precio,
       stockMinimoAlerta: p.stockMinimoAlerta,
-      stockInicial: 0,
+      stockInicial: '',
     });
     setModalError(null);
     setShowModal(true);
@@ -116,8 +116,9 @@ export const ProductsPage: React.FC = () => {
       setModalError('El nombre del producto es obligatorio.');
       return;
     }
-    if (formData.precio < 0) {
-      setModalError('El precio no puede ser negativo.');
+    const precioNum = parseFloat(String(formData.precio));
+    if (isNaN(precioNum) || precioNum < 0) {
+      setModalError('Por favor ingresa un precio válido.');
       return;
     }
     if (!formData.emprendimientoId) {
@@ -133,8 +134,8 @@ export const ProductsPage: React.FC = () => {
         await api.updateProduct(editingProduct.id, {
           nombre: formData.nombre,
           descripcion: formData.descripcion,
-          precio: Number(formData.precio),
-          stockMinimoAlerta: Number(formData.stockMinimoAlerta),
+          precio: precioNum,
+          stockMinimoAlerta: Number(formData.stockMinimoAlerta) || 2,
         });
       } else {
         await api.createProduct({
@@ -142,9 +143,9 @@ export const ProductsPage: React.FC = () => {
           emprendimientoId: formData.emprendimientoId,
           nombre: formData.nombre,
           descripcion: formData.descripcion,
-          precio: Number(formData.precio),
-          stockMinimoAlerta: Number(formData.stockMinimoAlerta),
-          stockInicial: Number(formData.stockInicial),
+          precio: precioNum,
+          stockMinimoAlerta: Number(formData.stockMinimoAlerta) || 2,
+          stockInicial: Number(formData.stockInicial) || 0,
         });
       }
 
@@ -405,15 +406,17 @@ export const ProductsPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
-                    Precio de Venta ($)
+                    Precio de Venta ($) *
                   </label>
                   <input
                     type="number"
                     min="0"
-                    step="100"
+                    step="0.01"
+                    placeholder="0.00"
                     value={formData.precio}
-                    onChange={(e) => setFormData({ ...formData, precio: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-base font-bold border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setFormData({ ...formData, precio: e.target.value })}
+                    className="w-full px-3 py-2 text-base font-bold border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none text-orange-600"
                   />
                 </div>
 
@@ -424,10 +427,10 @@ export const ProductsPage: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    placeholder="2"
                     value={formData.stockMinimoAlerta}
-                    onChange={(e) =>
-                      setFormData({ ...formData, stockMinimoAlerta: parseInt(e.target.value) || 0 })
-                    }
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setFormData({ ...formData, stockMinimoAlerta: e.target.value })}
                     className="w-full px-3 py-2 text-base font-bold border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none"
                   />
                 </div>
@@ -442,10 +445,10 @@ export const ProductsPage: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    placeholder="0"
                     value={formData.stockInicial}
-                    onChange={(e) =>
-                      setFormData({ ...formData, stockInicial: parseInt(e.target.value) || 0 })
-                    }
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setFormData({ ...formData, stockInicial: e.target.value })}
                     className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:outline-none"
                   />
                 </div>
