@@ -1,4 +1,4 @@
-﻿import { prisma } from '../db';
+import { prisma } from '../db';
 import { municipalAuditService } from './municipalAuditService';
 
 export const acompanamientoService = {
@@ -199,11 +199,49 @@ export const acompanamientoService = {
     return nueva;
   },
 
-  // --- PRESENCIA DIGITAL ---
+  // --- PRESENCIA DIGITAL Y REDES SOCIALES ---
   async getPresenciaDigital(emprendimientoId: string) {
     return prisma.presenciaDigital.findMany({
       where: { emprendimientoId },
       orderBy: { canal: 'asc' },
+    });
+  },
+
+  async getAllRedesSociales(filtros?: { canal?: string; search?: string }) {
+    const where: any = {};
+    if (filtros?.canal && filtros.canal !== 'TODOS') {
+      where.canal = filtros.canal;
+    }
+    if (filtros?.search?.trim()) {
+      const q = filtros.search.trim();
+      where.OR = [
+        { usuarioRed: { contains: q } },
+        { url: { contains: q } },
+        { emprendimiento: { nombre: { contains: q } } },
+        { emprendimiento: { responsable: { contains: q } } },
+        { emprendimiento: { rubro: { contains: q } } },
+      ];
+    }
+
+    return prisma.presenciaDigital.findMany({
+      where,
+      orderBy: [
+        { seguidores: 'desc' },
+        { canal: 'asc' },
+      ],
+      include: {
+        emprendimiento: {
+          select: {
+            id: true,
+            codigo: true,
+            nombre: true,
+            responsable: true,
+            rubro: true,
+            telefono: true,
+            mail: true,
+          },
+        },
+      },
     });
   },
 
@@ -213,16 +251,35 @@ export const acompanamientoService = {
       emprendimientoId: string;
       canal: string;
       url: string;
+      usuarioRed?: string;
+      seguidores?: number;
       estado?: string;
       observaciones?: string;
     }
   ) {
+    let cleanUrl = data.url?.trim() || '';
+    let usuarioRed = data.usuarioRed?.trim() || null;
+
+    if (!usuarioRed && cleanUrl) {
+      const match = cleanUrl.match(/(?:instagram\.com\/|@)([a-zA-Z0-9._]+)/i);
+      if (match && match[1]) {
+        usuarioRed = `@${match[1].replace(/[/]$/, '')}`;
+      }
+    }
+
+    const seguidoresNum =
+      data.seguidores !== undefined && data.seguidores !== null && !isNaN(Number(data.seguidores))
+        ? Number(data.seguidores)
+        : undefined;
+
     if (data.id) {
       return prisma.presenciaDigital.update({
         where: { id: data.id },
         data: {
           canal: data.canal,
-          url: data.url.trim(),
+          url: cleanUrl,
+          usuarioRed: usuarioRed || undefined,
+          ...(seguidoresNum !== undefined ? { seguidores: seguidoresNum, fechaSeguidores: new Date() } : {}),
           estado: data.estado || 'ACTIVO',
           observaciones: data.observaciones?.trim() || null,
           fechaRevision: new Date(),
@@ -234,10 +291,73 @@ export const acompanamientoService = {
       data: {
         emprendimientoId: data.emprendimientoId,
         canal: data.canal,
-        url: data.url.trim(),
+        url: cleanUrl,
+        usuarioRed: usuarioRed || null,
+        seguidores: seguidoresNum ?? 0,
+        fechaSeguidores: seguidoresNum !== undefined ? new Date() : null,
         estado: data.estado || 'ACTIVO',
         observaciones: data.observaciones?.trim() || null,
         fechaRevision: new Date(),
+      },
+    });
+  },
+
+  async updateSeguidores(id: string, seguidores: number) {
+    const seguidoresNum = Math.max(0, Number(seguidores) || 0);
+    return prisma.presenciaDigital.update({
+      where: { id },
+      data: {
+        seguidores: seguidoresNum,
+        fechaSeguidores: new Date(),
+        fechaRevision: new Date(),
+      },
+      include: {
+        emprendimiento: true,
+      },
+    });
+  },
+
+  async updatePresenciaDigital(
+    id: string,
+    data: {
+      emprendimientoId?: string;
+      canal?: string;
+      url?: string;
+      usuarioRed?: string;
+      seguidores?: number;
+      estado?: string;
+      observaciones?: string;
+    }
+  ) {
+    let cleanUrl = data.url !== undefined ? data.url.trim() : undefined;
+    let usuarioRed = data.usuarioRed !== undefined ? (data.usuarioRed?.trim() || null) : undefined;
+
+    if (usuarioRed === undefined && cleanUrl) {
+      const match = cleanUrl.match(/(?:instagram\.com\/|@)([a-zA-Z0-9._]+)/i);
+      if (match && match[1]) {
+        usuarioRed = `@${match[1].replace(/[/]$/, '')}`;
+      }
+    }
+
+    const seguidoresNum =
+      data.seguidores !== undefined && data.seguidores !== null && !isNaN(Number(data.seguidores))
+        ? Number(data.seguidores)
+        : undefined;
+
+    return prisma.presenciaDigital.update({
+      where: { id },
+      data: {
+        ...(data.emprendimientoId && { emprendimientoId: data.emprendimientoId }),
+        ...(data.canal && { canal: data.canal }),
+        ...(cleanUrl !== undefined && { url: cleanUrl }),
+        ...(usuarioRed !== undefined && { usuarioRed }),
+        ...(seguidoresNum !== undefined && { seguidores: seguidoresNum, fechaSeguidores: new Date() }),
+        ...(data.estado && { estado: data.estado }),
+        ...(data.observaciones !== undefined && { observaciones: data.observaciones?.trim() || null }),
+        fechaRevision: new Date(),
+      },
+      include: {
+        emprendimiento: true,
       },
     });
   },

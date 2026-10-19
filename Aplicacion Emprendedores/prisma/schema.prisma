@@ -211,6 +211,9 @@ model Colectivo {
   descripcion        String?      @db.Text
   orientacion        String?
   imagen             String?
+  redesSociales      String?      @db.Text
+  contacto           String?      @db.Text
+  puntosVenta        String?      @db.Text
   fechaInicio        DateTime?
   fechaFin           DateTime?
   estado             String       @default("ACTIVO") // ACTIVO | INACTIVO
@@ -385,6 +388,9 @@ model PresenciaDigital {
   emprendimientoId String
   canal            String         // INSTAGRAM | FACEBOOK | TIKTOK | WEB | GOOGLE_MAPS | WHATSAPP_BUSINESS | OTRO
   url              String
+  usuarioRed       String?        // Ej: "@boop_ceramica"
+  seguidores       Int?           @default(0)
+  fechaSeguidores  DateTime?
   estado           String         @default("ACTIVO") // ACTIVO | INACTIVO | EN_REVISION
   fechaRevision    DateTime?
   observaciones    String?        @db.Text

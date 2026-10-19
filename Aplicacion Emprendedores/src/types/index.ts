@@ -353,6 +353,9 @@ export interface Colectivo {
   descripcion?: string | null;
   orientacion?: string | null;
   imagen?: string | null;
+  redesSociales?: string | null;
+  contacto?: string | null;
+  puntosVenta?: string | null;
   fechaInicio?: string | null;
   fechaFin?: string | null;
   estado: 'ACTIVO' | 'INACTIVO' | string;
@@ -465,9 +468,13 @@ export interface PresenciaDigital {
   emprendimientoId: string;
   canal: string;
   url: string;
+  usuarioRed?: string | null;
+  seguidores?: number | null;
+  fechaSeguidores?: string | null;
   estado: 'ACTIVO' | 'INACTIVO' | 'EN_REVISION' | string;
   fechaRevision?: string | null;
   observaciones?: string | null;
+  emprendimiento?: Emprendimiento;
 }
 
 export interface ServicioMunicipal {

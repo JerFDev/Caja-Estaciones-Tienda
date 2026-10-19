@@ -1,4 +1,4 @@
-﻿import { prisma } from '../db';
+import { prisma } from '../db';
 import { municipalAuditService } from './municipalAuditService';
 
 export const edicionService = {
@@ -58,6 +58,7 @@ export const edicionService = {
   async updateLocal(
     id: string,
     data: {
+      codigo?: string;
       nombre?: string;
       direccion?: string;
       descripcion?: string;
@@ -72,6 +73,7 @@ export const edicionService = {
     const actualizado = await prisma.local.update({
       where: { id },
       data: {
+        ...(data.codigo && { codigo: data.codigo.trim().toUpperCase() }),
         ...(data.nombre && { nombre: data.nombre.trim() }),
         ...(data.direccion !== undefined && { direccion: data.direccion?.trim() || null }),
         ...(data.descripcion !== undefined && { descripcion: data.descripcion?.trim() || null }),

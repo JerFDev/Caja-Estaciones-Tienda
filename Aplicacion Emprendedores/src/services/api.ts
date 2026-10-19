@@ -687,7 +687,15 @@ export const api = {
     return handleResponse<ReunionMunicipal>(res);
   },
 
-  // Presencia Digital
+  // Presencia Digital & Redes Sociales
+  async getRedesSociales(filtros?: { canal?: string; search?: string }): Promise<PresenciaDigital[]> {
+    const params = new URLSearchParams();
+    if (filtros?.canal) params.append("canal", filtros.canal);
+    if (filtros?.search) params.append("search", filtros.search);
+    const res = await fetch(`${API_BASE}/municipal/redes-sociales?${params.toString()}`);
+    return handleResponse<PresenciaDigital[]>(res);
+  },
+
   async getPresenciaDigital(emprendimientoId: string): Promise<PresenciaDigital[]> {
     const res = await fetch(`${API_BASE}/municipal/emprendimientos/${emprendimientoId}/presencia-digital`);
     return handleResponse<PresenciaDigital[]>(res);
@@ -698,6 +706,24 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+    });
+    return handleResponse<PresenciaDigital>(res);
+  },
+
+  async updatePresenciaDigital(id: string, data: any): Promise<PresenciaDigital> {
+    const res = await fetch(`${API_BASE}/municipal/presencia-digital/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse<PresenciaDigital>(res);
+  },
+
+  async updateSeguidores(id: string, seguidores: number): Promise<PresenciaDigital> {
+    const res = await fetch(`${API_BASE}/municipal/presencia-digital/${id}/seguidores`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seguidores }),
     });
     return handleResponse<PresenciaDigital>(res);
   },

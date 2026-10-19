@@ -1,4 +1,4 @@
-﻿import { prisma } from '../db';
+import { prisma } from '../db';
 import { municipalAuditService } from './municipalAuditService';
 
 export const colectivoService = {
@@ -50,6 +50,9 @@ export const colectivoService = {
       descripcion?: string;
       orientacion?: string;
       imagen?: string;
+      redesSociales?: string;
+      contacto?: string;
+      puntosVenta?: string;
       fechaInicio?: string;
       fechaFin?: string;
       estado?: string;
@@ -72,6 +75,9 @@ export const colectivoService = {
         descripcion: data.descripcion?.trim() || null,
         orientacion: data.orientacion?.trim() || null,
         imagen: data.imagen?.trim() || null,
+        redesSociales: data.redesSociales?.trim() || null,
+        contacto: data.contacto?.trim() || null,
+        puntosVenta: data.puntosVenta?.trim() || null,
         fechaInicio: data.fechaInicio ? new Date(data.fechaInicio) : new Date(),
         fechaFin: data.fechaFin ? new Date(data.fechaFin) : null,
         estado: data.estado || 'ACTIVO',
@@ -96,6 +102,9 @@ export const colectivoService = {
       descripcion?: string;
       orientacion?: string;
       imagen?: string;
+      redesSociales?: string;
+      contacto?: string;
+      puntosVenta?: string;
       fechaInicio?: string;
       fechaFin?: string;
       estado?: string;
@@ -112,6 +121,9 @@ export const colectivoService = {
         ...(data.descripcion !== undefined && { descripcion: data.descripcion?.trim() || null }),
         ...(data.orientacion !== undefined && { orientacion: data.orientacion?.trim() || null }),
         ...(data.imagen !== undefined && { imagen: data.imagen?.trim() || null }),
+        ...(data.redesSociales !== undefined && { redesSociales: data.redesSociales?.trim() || null }),
+        ...(data.contacto !== undefined && { contacto: data.contacto?.trim() || null }),
+        ...(data.puntosVenta !== undefined && { puntosVenta: data.puntosVenta?.trim() || null }),
         ...(data.fechaInicio !== undefined && { fechaInicio: data.fechaInicio ? new Date(data.fechaInicio) : null }),
         ...(data.fechaFin !== undefined && { fechaFin: data.fechaFin ? new Date(data.fechaFin) : null }),
         ...(data.estado && { estado: data.estado }),

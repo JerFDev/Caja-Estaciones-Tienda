@@ -830,7 +830,19 @@ app.post("/api/municipal/reuniones", async (req, res) => {
   }
 });
 
-// Presencia Digital
+// Presencia Digital & Redes Sociales
+app.get("/api/municipal/redes-sociales", async (req, res) => {
+  try {
+    const list = await acompanamientoService.getAllRedesSociales({
+      canal: req.query.canal as string,
+      search: req.query.search as string,
+    });
+    res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/api/municipal/emprendimientos/:id/presencia-digital", async (req, res) => {
   try {
     const list = await acompanamientoService.getPresenciaDigital(req.params.id);
@@ -844,6 +856,24 @@ app.post("/api/municipal/presencia-digital", async (req, res) => {
   try {
     const pd = await acompanamientoService.upsertPresenciaDigital(req.body);
     res.status(201).json(pd);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put("/api/municipal/presencia-digital/:id", async (req, res) => {
+  try {
+    const updated = await acompanamientoService.updatePresenciaDigital(req.params.id, req.body);
+    res.json(updated);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put("/api/municipal/presencia-digital/:id/seguidores", async (req, res) => {
+  try {
+    const updated = await acompanamientoService.updateSeguidores(req.params.id, req.body.seguidores);
+    res.json(updated);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
